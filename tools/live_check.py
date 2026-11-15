@@ -89,7 +89,8 @@ def main():
         "api_key": key, "static_gtfs_url": URL, "static_gtfs_path": f"{work}/regional.zip",
         "cache_path": f"{work}/tt.json", "network_cache_path": f"{work}/rnet.json",
         "network_json_path": f"{out}/vline_network.json",
-        "routes": [{"id": "ballan_to_ballarat", "name": "Ballan to Ballarat", "from_name": "Ballan", "to_name": "Ballarat"}]})
+        "routes": [{"id": "ballan_to_ballarat", "name": "Ballan to Ballarat", "from_name": "Ballan", "to_name": "Ballarat"},
+                   {"id": "ballan_to_southern_cross", "name": "Ballan to Southern Cross", "from_name": "Ballan", "to_name": "Southern Cross"}]})
     reg.initialize(); reg._refresh_worker(True)
     if not reg.net:
         problems.append("regional network failed to build")
