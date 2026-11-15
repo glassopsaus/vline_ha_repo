@@ -1,5 +1,5 @@
 /*
- * vline-network-card  v3.11.0
+ * vline-network-card  v3.12.0
  * Live schematic (tube-map style: straight lines at 45-degree angles) map of the V/Line network: every line, trains as moving markers,
  * and an overall status for each line. Tap a line (map or list) to zoom to it.
  *
@@ -138,10 +138,8 @@ class VLineNetworkCard extends HTMLElement {
       entity: "sensor.vline_network",
       geometry_url: "/local/vline_network.json",
       title: "V/Line network",
-      train_labels: "always",   // always | zoom | off  (number, origin and destination beside each train)
-      headings: "official",   // official = V/Line map headings (tube-map octants); compass = exact true bearings from Melbourne
+      train_labels: "click",   // click = bubble only for the train you click; off = never
     }, config || {});
-    this._official = String(this._config.headings).toLowerCase() === "official";
     this._render();
   }
 
@@ -282,7 +280,7 @@ class VLineNetworkCard extends HTMLElement {
           const tb = bearing(ln._km[k], ln._km[names.length - 1]);
           let d1 = Math.round(tb / 45) % 8;
           const atHub = (isHub(names[k]) && o.dir === null) || (o.x === 0 && o.y === 0);
-          const ov = this._official ? (OFFICIAL.find((r) => r[0].test(names[names.length - 1])) || [])[1] : undefined;   // default: true compass bearings
+          const ov = (OFFICIAL.find((r) => r[0].test(names[names.length - 1])) || [])[1];
           if (atHub) {
             if (ov) d1 = ov.o;
             else if (forced && forced.has(ln)) d1 = forced.get(ln);
@@ -318,14 +316,13 @@ class VLineNetworkCard extends HTMLElement {
           let pos = [o.x, o.y];
           for (let j = k + 1; j < names.length; j++) {
             const dir = j <= bend ? d1 : d2;
-            // Compass mode: a straight ray at the exact true bearing, stations spaced by real distance (no octant snapping, no squashing).
-            const v = this._official ? vec(dir) : [Math.sin((tb * Math.PI) / 180), -Math.cos((tb * Math.PI) / 180)];
-            let d = this._official ? step(ln._km[j - 1], ln._km[j]) : Math.max(6, 3 * (ln._ss[j] - ln._ss[j - 1]));
-            if (this._official && Math.abs(v[1]) < 1e-6) {
-              // Horizontal run: main station names sit just below-right of their markers, always in the same place,
-              // so stretch the run until each main name fits clear of the next main name along the line.
+            const v = vec(dir);
+            let d = step(ln._km[j - 1], ln._km[j]);
+            if (Math.abs(v[1]) < 1e-6) {
+              // Horizontal run: the name sits to the right of its marker, so the gap to the neighbour on that side
+              // must hold the whole name (plus a margin) at the current drawing scale.
               const lab = names[v[0] < 0 ? j : j - 1];
-              if ((this.clientWidth || 800) >= 640) d = Math.max(d, 0.56 * (8 + lab.length * 7.7 + 14) * Math.min(this._U || 2.2, 3));   // capped: on a narrow card names are thinned out instead of stretching the map
+              d = Math.max(d, (8 + lab.length * 7.7 + 14) * (this._U || 2.2));
             }
             pos = [pos[0] + v[0] * d, pos[1] + v[1] * d];
             if (!placed.has(key(names[j]))) placed.set(key(names[j]), { x: pos[0], y: pos[1], dir, ln });
@@ -390,18 +387,10 @@ class VLineNetworkCard extends HTMLElement {
         const pick = rest.splice(Math.floor(rest.length / (3 - have + 1)), 1)[0];
         if (pick) { pick.major = true; have++; }
       }
-      // Horizontal runs: alternate names above and below the line (overview: among the names shown; zoomed: every station).
-      const isFlat = (q) => q.offs && q.offs.length === 2 && q.offs[0] === 16 && q.offs[1] === -16;
-      let k1 = 0, k2 = 0;
-      ln._st.forEach((q) => {
-        if (!isFlat(q) || /southern cross/i.test(q.name)) return;
-        q.offsZ = k2++ % 2 ? [-16, 16] : [16, -16];
-        if (q.major || q.end) q.offs = k1++ % 2 ? [-16, 16] : [16, -16];
-      });
-      ln._st.forEach((q) => { if (q.end || q.major || q.ix) maxx = Math.max(maxx, q.x + (14 + q.name.length * 8) * (this._U || 2.4)); });   // names must never run off the right edge
+      ln._st.forEach((q) => { if (q.end) maxx = Math.max(maxx, q.x + 30 + q.name.length * 7.4 * 2.4 - 220); });
       ln._sx.forEach((q) => { minx = Math.min(minx, q[0]); maxx = Math.max(maxx, q[0]); miny = Math.min(miny, q[1]); maxy = Math.max(maxy, q[1]); });
     });
-    const padX = 40, padY = 140;
+    const padX = 220, padY = 90;
     this._full = { x: minx - padX, y: miny - padY, w: Math.max(maxx - minx + 2 * padX, 300), h: Math.max(maxy - miny + 2 * padY, 200) };
     this._hubDirs = hubDirs;
     this._mel = null;
@@ -567,8 +556,7 @@ class VLineNetworkCard extends HTMLElement {
       const side = Math.sign(pref[0]);
       const vo = side === 0 ? [0] : (side > 0 ? [16, 14, 26, 40] : [-16, -14, -26, -40]).filter((v) => true);
       const cand = side === 0 ? [0] : pref.filter((v) => Math.sign(v) === side || v === 0).concat(vo.filter((v) => !pref.includes(v)));
-      const flat = pref.length === 2 && Math.abs(pref[0]) === 16 && pref[0] === -pref[1];   // horizontal run: one fixed slot, just below-right
-      for (const strict of [true, false]) for (const dx of (flat ? [0] : [0, 10, 22])) for (const off of (flat ? [pref[0]] : cand)) {
+      for (const strict of [true, false]) for (const dx of [0, 10, 22]) for (const off of cand) {
         if (!strict && !isEnd) continue;
         const box = { x: x + (8 + dx) * u, y: y + off * u - h / 2, w, h };
         if (box.x + box.w > view.x + view.w - 2 * u || hit(box) || (strict && onLine(box))) continue;
@@ -592,12 +580,19 @@ class VLineNetworkCard extends HTMLElement {
     place("Southern Cross", mel.x, mel.y, "mel", [18, -18, 34]);
     const lines = this._geo.lines;
     const zoomed = this._sel ? lines.find((l) => l.id === this._sel) : null;
+    // On horizontal runs, the names that are shown alternate below / above the line so neighbours never squash together.
+    const flat = (q) => q.offs && q.offs.length === 2 && q.offs[0] === 16 && q.offs[1] === -16;
+    const alt = new Map();
+    const alternate = (list) => { let k = 0; list.forEach((q) => { if (flat(q) && !/southern cross/i.test(q.name)) alt.set(q, k++ % 2 ? [-16, 16] : [16, -16]); }); };
+    const o = (q) => alt.get(q) || q.offs;
     if (zoomed) {
-      zoomed._st.filter((s) => s.end && !/southern cross/i.test(s.name)).forEach((s) => place(s.name, s.x, s.y, "", s.offsZ || s.offs, true));
-      zoomed._st.filter((s) => !s.end && !/southern cross/i.test(s.name)).forEach((s) => place(s.name, s.x, s.y, "", s.offsZ || s.offs));
+      alternate(zoomed._st);
+      zoomed._st.filter((s) => s.end && !/southern cross/i.test(s.name)).forEach((s) => place(s.name, s.x, s.y, "", o(s), true));
+      zoomed._st.filter((s) => !s.end && !/southern cross/i.test(s.name)).forEach((s) => place(s.name, s.x, s.y, "", o(s)));
     } else {
-      lines.forEach((l) => l._st.filter((s) => s.end && !/southern cross/i.test(s.name)).forEach((s) => place(s.name, s.x, s.y, "", s.offs, true)));
-      lines.forEach((l) => l._st.filter((s) => s.major && !s.end && !/southern cross/i.test(s.name)).forEach((s) => place(s.name, s.x, s.y, "", s.offs)));
+      lines.forEach((l) => alternate(l._st.filter((s) => s.end || s.major)));
+      lines.forEach((l) => l._st.filter((s) => s.end && !/southern cross/i.test(s.name)).forEach((s) => place(s.name, s.x, s.y, "", o(s), true)));
+      lines.forEach((l) => l._st.filter((s) => s.major && !s.end && !/southern cross/i.test(s.name)).forEach((s) => place(s.name, s.x, s.y, "", o(s))));
     }
   }
 
