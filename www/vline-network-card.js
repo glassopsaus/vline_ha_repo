@@ -314,13 +314,20 @@ class VLineNetworkCard extends HTMLElement {
           if (ov) { if (ov.then !== undefined && rem > 1) { d2 = ov.then; bend = k + Math.max(1, Math.floor(rem * 0.4)); } }
           else if (Math.abs(off) > 15 && rem > 2) { d2 = (d1 + (off > 0 ? 1 : 7)) % 8; bend = k + 1 + Math.max(1, Math.floor(rem * 0.45)); }
           let pos = [o.x, o.y];
+          // Ballarat / Ararat / Wendouree trunk: the horizontal keeps its overall length (104 per station, like the
+          // Warrnambool line), but the unnamed suburban stops are packed closer so Melton, Bacchus Marsh, Ballan,
+          // Ballarat, Wendouree and Ararat get the room their names need.
+          const trunk = /^(ararat|wendouree|ballarat|maryborough)/i.test(names[names.length - 1]);
+          const named = (nm) => /^(melton|bacchus marsh|ballan|ballarat|wendouree|ararat)/i.test(nm);
+          let hzN = 0, hzW = 0;
+          if (trunk) for (let j = k + 1; j < names.length; j++) {
+            if (Math.abs(vec(j <= bend ? d1 : d2)[1]) < 1e-6) { hzN++; hzW += named(names[j]) ? 3 : 1; }
+          }
           for (let j = k + 1; j < names.length; j++) {
             const dir = j <= bend ? d1 : d2;
             const v = vec(dir);
             let d = step(ln._km[j - 1], ln._km[j]);
-            // Ballarat / Ararat / Wendouree trunk: its many close stations would squash together on the horizontal,
-            // so give each the full spacing the Warrnambool line gets (104), leaving room for the names.
-            if (Math.abs(v[1]) < 1e-6 && /^(ararat|wendouree|ballarat|maryborough)/i.test(names[names.length - 1])) d = 104;
+            if (trunk && Math.abs(v[1]) < 1e-6) d = (104 * hzN / hzW) * (named(names[j]) ? 3 : 1);
             pos = [pos[0] + v[0] * d, pos[1] + v[1] * d];
             if (!placed.has(key(names[j]))) placed.set(key(names[j]), { x: pos[0], y: pos[1], dir, ln });
             ln._sx.push([pos[0], pos[1]]);
