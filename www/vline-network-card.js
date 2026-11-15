@@ -86,7 +86,7 @@ text.lbl.mel { font-weight: 800; font-size: 12px; }
 .tr .ring { display: none; fill: none; stroke: var(--primary-text-color); stroke-width: 1.5px; vector-effect: non-scaling-stroke; }
 text.tlbl { font-size: 9px; font-weight: 600; fill: var(--ink); paint-order: stroke; stroke: var(--paper); stroke-width: 3px; pointer-events: none; }
 text.dly { font-size: 10px; font-weight: 700; fill: var(--c); paint-order: stroke; stroke: var(--paper); stroke-width: 3px; pointer-events: none; }
-.rows { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; padding: 8px 12px 6px; }
+.rows { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; padding: 8px 12px 6px; }
 .row { display: block; width: 100%; box-sizing: border-box; text-align: left; background: none; color: inherit; font: inherit; min-width: 0;
   padding: 7px 9px 8px; border-radius: 9px; cursor: pointer; border: 1px solid var(--divider-color); border-top: 4px solid var(--lc); }
 .row.sel { background: color-mix(in srgb, var(--primary-text-color) 8%, transparent); border-color: var(--lc); }
@@ -103,7 +103,7 @@ text.dly { font-size: 10px; font-weight: 700; fill: var(--c); paint-order: strok
   background: color-mix(in srgb, var(--c) 12%, transparent); border: 1px solid color-mix(in srgb, var(--c) 40%, transparent); }
 .foot { display: flex; justify-content: space-between; gap: 8px; padding: 6px 16px 12px; font-size: .74rem; color: var(--secondary-text-color); }
 .empty { padding: 24px 16px; color: var(--secondary-text-color); font-size: .9rem; }
-@container (min-width: 640px) { .rows { grid-template-columns: repeat(var(--cols2, 4), minmax(0, 1fr)); } }
+@container (min-width: 640px) { .rows { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
 `;
 
 class VLineNetworkCard extends HTMLElement {
