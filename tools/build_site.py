@@ -12,7 +12,7 @@ for f in os.listdir(preview.WWW):
         open(os.path.join(loc, f), "w").write(open(src).read().replace('"/local/', '"./local/'))
     else:
         shutil.copy(src, loc)
-for f in ("sensors.json", "vline_network.json", "vic_metro_network.json"):
+for f in ("sensors.json", "vline_network.json", "vic_metro_network.json", "vline_journeys.json"):
     shutil.copy(os.path.join(preview.OUT, f), loc)
 open(os.path.join(site, "index.html"), "w").write(preview.PAGE.replace("/local/", "./local/"))
 open(os.path.join(site, ".nojekyll"), "w").write("")
