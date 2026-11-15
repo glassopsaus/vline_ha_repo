@@ -167,10 +167,17 @@ def build_network(zf):
         ln["color"] = PALETTE[i % len(PALETTE)]
     keep = {ln["id"] for ln in lines}
 
+    def name_of(sid):
+        s = stops.get(sid)
+        if not s:
+            return ""
+        return _clean_name(stops.get(s.get("parent_station") or "", s)["stop_name"])
+
     sched = {}
     for t, info in trips.items():
         if info["r"] in keep and t in calls:
             sched[t] = {"r": info["r"], "h": info["h"],
+                        "o": name_of(calls[t][0][1]), "d": name_of(calls[t][-1][1]),
                         "t": [[seq, arr, dep] for seq, _sid, arr, dep in calls[t]]}
     return {"lines": lines, "sched": sched, "has_shapes": bool(shapes)}
 
@@ -339,6 +346,27 @@ def trip_delay_s(entry, tu, now):
     return d if d is None or abs(d) <= 7200 else None  # >2 h means the schedule isn't this trip's
 
 
+def trip_od(net, trip_id, entry):
+    """(origin, destination) station names of a trip, "" when unknown."""
+    if entry and (entry.get("o") or entry.get("d")):
+        return entry.get("o") or "", entry.get("d") or ""
+    od = (net.get("trip_od") or {}).get(trip_id)
+    if od:
+        names = net.get("od_names") or []
+        g = lambda i: names[i] if isinstance(i, int) and 0 <= i < len(names) else ""
+        return g(od[0]), g(od[1])
+    return "", ""
+
+
+def train_no(trip_id, v=None):
+    """Service number: the trailing digits of the trip ID (01-BAT--6-T0-8102 -> 8102)."""
+    m = re.search(r"(\d+)$", str(trip_id or ""))
+    if m:
+        return m.group(1).lstrip("0") or "0"
+    lab = (v or {}).get("label")
+    return str(lab) if lab else ""
+
+
 def build_vehicles(net, rt, veh, now, delay_floor_s=0):
     """Train markers for every live vehicle that belongs to a known line."""
     out = []
@@ -352,8 +380,11 @@ def build_vehicles(net, rt, veh, now, delay_floor_s=0):
         if tu and tu.get("cancelled"):
             continue
         d = trip_delay_s(entry, tu, now)
+        frm, dst = trip_od(net, trip_id, entry)
         out.append({
-            "id": trip_id, "line": rid, "to": entry["h"] if entry else "",
+            "id": trip_id, "line": rid,
+            "no": train_no(trip_id, v), "from": frm,
+            "to": (entry["h"] if entry and entry.get("h") else dst),
             "lat": v["latitude"], "lon": v["longitude"],
             "brg": v.get("bearing"), "spd": v.get("speed_kmh"),
             "delay_min": (round(d / 60) if d is not None else None),
