@@ -14,7 +14,7 @@ problems = log.split("Problems:")[-1].strip().splitlines()[:6] if "Problems:" in
 ok = problems[:1] == ["none"] or (problems and problems[0].strip() == "none")
 
 out = [f"# Live check report\n", f"Run: {mel}\n", ("**Result: no problems found.**\n" if ok else "**Result: problems found, see the log at the bottom.**\n")]
-for tab, title in (("victoria", "Victoria (official map, Metro + V/Line)"), ("network", "V/Line network"), ("ballan", "Ballan route cards")):
+for tab, title in (("ballan", "Ballan Services"), ("network", "V/Line Network (geographic map)"), ("victoria", "Full Victorian Network (official map)")):
     out.append(f"\n## {title}\n")
     for w, label in ((1300, "Wide"), (420, "Phone")):
         for scheme in ("light", "dark"):
