@@ -89,7 +89,7 @@ def main():
     reg = vline_trains.VLineTrains({
         "api_key": key, "static_gtfs_url": URL, "static_gtfs_path": f"{work}/regional.zip",
         "cache_path": f"{work}/tt.json", "network_cache_path": f"{work}/rnet.json",
-        "network_json_path": f"{out}/vline_network.json",
+        "network_json_path": f"{out}/vline_network.json", "journeys_json_path": f"{out}/vline_journeys.json",
         "routes": [{"id": "ballan_to_ballarat", "name": "Ballan to Ballarat", "from_name": "Ballan", "to_name": "Ballarat"},
                    {"id": "ballan_to_southern_cross", "name": "Ballan to Southern Cross", "from_name": "Ballan", "to_name": "Southern Cross"}]})
     reg.initialize(); reg._refresh_worker(not o.reuse)
