@@ -1,0 +1,33 @@
+# Repo version: keys come from secrets.yaml (local) or the VLINE_API_KEY secret (GitHub).
+vline_trains:
+  module: vline_trains
+  class: VLineTrains
+  api_key: !secret vline_api_key
+  poll_seconds: 30
+  services_per_route: 4
+  watch_stop: Ballan
+  cache_path: /config/vline_timetable.json
+  static_gtfs_url: https://opendata.transport.vic.gov.au/dataset/3f4e292e-7f8a-4ffe-831f-1953be0fe448/resource/62370a3a-3fe0-4f6b-9022-9ebbf25751cc/download/gtfs.zip
+  static_gtfs_path: /config/gtfs_regional_train.zip
+  timetable_update_time: "03:30:00"
+  auto_refresh_on_mismatch: true
+  ptv_devid: ""
+  ptv_key: ""
+  ptv_poll_seconds: 900
+  network_json_path: /homeassistant/www/vline_network.json
+  routes:
+    - {id: ballan_to_ballarat, name: Ballan to Ballarat, from_name: Ballan, to_name: Ballarat}
+    - {id: ballan_to_southern_cross, name: Ballan to Southern Cross, from_name: Ballan, to_name: Southern Cross}
+    - {id: southern_cross_to_ballan, name: Southern Cross to Ballan, from_name: Southern Cross, to_name: Ballan}
+
+metro_network:
+  module: metro_network
+  class: MetroNetwork
+  api_key: !secret vline_api_key
+  poll_seconds: 30
+  static_gtfs_url: https://opendata.transport.vic.gov.au/dataset/3f4e292e-7f8a-4ffe-831f-1953be0fe448/resource/62370a3a-3fe0-4f6b-9022-9ebbf25751cc/download/gtfs.zip
+  static_gtfs_path: /config/gtfs_metro_train.zip
+  timetable_update_time: "03:45:00"
+  ptv_devid: ""
+  ptv_key: ""
+  network_json_path: /homeassistant/www/vic_metro_network.json

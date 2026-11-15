@@ -1,0 +1,29 @@
+# Paste into: dashboard > pencil (edit) > three dots > Raw configuration editor
+# (replace everything in the editor with this)
+title: V/Line
+views:
+  - title: Victoria
+    path: victoria
+    icon: mdi:map
+    panel: true            # official network map with live Metro + V/Line trains
+    cards:
+      - type: custom:vic-network-card
+
+  - title: Network
+    path: network
+    icon: mdi:train
+    panel: true            # the map card fills the whole page (best in landscape)
+    cards:
+      - type: custom:vline-network-card
+        title: V/Line network
+
+  - title: Ballan
+    path: ballan
+    icon: mdi:train-variant
+    cards:
+      - type: custom:vline-train-card
+        entity: sensor.vline_ballan_to_ballarat
+        title: Ballan to Ballarat
+      - type: custom:vline-train-card
+        entity: sensor.vline_ballan_to_southern_cross
+        title: Ballan to Southern Cross
