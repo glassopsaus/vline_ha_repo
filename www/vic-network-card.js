@@ -517,6 +517,7 @@ class VicNetworkCard extends HTMLElement {
       const f = w / this._vb.w;
       this._setVB({ x: mx - (mx - this._vb.x) * f, y: my - (my - this._vb.y) * f, w, h: 0 });
     }, { passive: false });
+    svg.addEventListener("click", () => { if (this._pick && !(this._moved > 5)) { this._pick = null; this._rowSig = ""; this._update(); } });   // click empty map: close the train bubble
     svg.addEventListener("pointerdown", (e) => {
       pts.set(e.pointerId, [e.clientX, e.clientY]);
       this._moved = 0;
@@ -748,6 +749,7 @@ class VicNetworkCard extends HTMLElement {
         this._markers.set(key, m);
       }
       m.v = v;
+      if (this._pick === key && this._gt.lastChild !== m.g) this._gt.append(m.g);   // keep the open bubble on top
       const lvl = this._levelOf(v);
       m.g.setAttribute("class", `tr ${lvl}${this._sel && this._sel !== v._src + "|" + v.line ? " dim" : ""}${this._pick === key ? " picked" : ""}`);
       const brg = num(v.brg);
@@ -759,15 +761,17 @@ class VicNetworkCard extends HTMLElement {
       // label: service number (+ minutes late), then origin -> destination
       const l1 = `${v.no || ""}${d !== null && d !== undefined && d >= 5 ? ` +${d}` : ""}`.trim();
       const l2 = v.from && v.to ? `${v.from} \u2192 ${v.to}` : v.to ? `to ${v.to}` : v.from ? `from ${v.from}` : "";
-      if (m.sig !== l1 + "|" + l2) {
-        m.sig = l1 + "|" + l2;
+      const diff = d === null || d === undefined ? "" : d >= 1 ? `${d} min late` : d <= -1 ? `${-d} min early` : "on time";
+      const l3 = [v.arr ? `Arrives ${v.arr}` : "", diff].filter(Boolean).join(" \u00B7 ");
+      if (m.sig !== l1 + "|" + l2 + "|" + l3) {
+        m.sig = l1 + "|" + l2 + "|" + l3;
         m.lbl.textContent = "";
         const a = svgEl("tspan", { class: "n" }); a.textContent = l1 || (v.label || "Train");
         m.lbl.append(a);
-        if (l2) { const b = svgEl("tspan", { class: "sub" }); b.textContent = l2; m.lbl.append(b); }
-        m.l1 = a; m.l2 = m.lbl.querySelector(".sub");
-        m.w = Math.max(l1.length * 6.6, l2.length * 5.6) + 6;
-        m.lines = l2 ? 2 : 1;
+        for (const t of [l2, l3]) if (t) { const b = svgEl("tspan", { class: "sub" }); b.textContent = t; m.lbl.append(b); }
+        m.l1 = a; m.subs = [...m.lbl.querySelectorAll(".sub")];
+        m.w = Math.max(l1.length * 6.6, l2.length * 5.6, l3.length * 5.6) + 6;
+        m.lines = 1 + m.subs.length;
       }
       // schematic position follows the real position along the line; direction from the bearing
       const km = this._kxy(lat, lon);
@@ -784,13 +788,7 @@ class VicNetworkCard extends HTMLElement {
   }
 
   _wantLabel(m, key) {
-    const mode = String(this._config.train_labels || "zoom");
-    if (this._pick === key) return true;
-    if (mode === "off") return false;
-    const lk = m.v._src + "|" + m.v.line;
-    if (this._sel && this._sel !== lk) return false;           // other lines are faded while one is selected
-    if (mode === "always" && this._pxw >= 600) return true;    // on a phone-width map "always" would be a wall of text
-    return this._sel === lk || (this._vb && this._vb.w < this._full.w * 0.55);
+    return this._pick === key && String(this._config.train_labels || "click") !== "off";   // icon only until a train is clicked
   }
 
   // Show "number / origin -> destination" beside trains, choosing a free spot (screen-pixel boxes).
@@ -816,14 +814,14 @@ class VicNetworkCard extends HTMLElement {
     const hardHit = (bx) => hardBoxes.some((o) => ov(bx, o));
     const softHits = (bx) => soft.filter((sl) => sl.s.outer.classList.contains("lab") && ov(bx, sl.box));
     const spots = (m, compact) => {
-      const w = compact ? (m.l1 ? m.l1.textContent.length * 6.6 + 6 : 30) : m.w, ln = compact ? 1 : m.lines, h = ln * LH + 2, x = m.px, y = m.py;
-      const y0 = ln === 2 ? -22 : -13;
+      const w = compact ? (m.l1 ? m.l1.textContent.length * 6.6 + 6 : 30) : m.w, ln = compact ? 1 : m.lines, h = ln * LH + 5, x = m.px, y = m.py;
+      const y0 = -(2 + ln * 10.5);
       return [["start", 11, -3, [x + 10, y - 13, x + 10 + w, y - 13 + h]], ["end", -11, -3, [x - 10 - w, y - 13, x - 10, y - 13 + h]],
         ["middle", 0, y0, [x - w / 2, y - 12 - h, x + w / 2, y - 11]], ["middle", 0, 18, [x - w / 2, y + 8, x + w / 2, y + 8 + h]]];
     };
     for (const [key, m] of items) {
       let pick = null, compact = false;
-      for (const c of (key === this._pick ? [false, true] : [true])) {   // service-number bubble only, until the train is clicked
+      for (const c of [false]) {   // the clicked train always gets its full bubble
         const cs = spots(m, c).filter((q) => !hardHit(q[3]));
         pick = cs.find((q) => !softHits(q[3]).length) || cs[0] || null;
         if (pick) { compact = c; break; }
@@ -839,7 +837,7 @@ class VicNetworkCard extends HTMLElement {
       m.bub.setAttribute("width", (bx[2] - bx[0] + 6).toFixed(1)); m.bub.setAttribute("height", (bx[3] - bx[1] + 3).toFixed(1));
       m.lbl.setAttribute("text-anchor", pick[0]); m.lbl.setAttribute("y", pick[2]); m.lbl.setAttribute("x", pick[1]);
       if (m.l1) { m.l1.setAttribute("x", pick[1]); }
-      if (m.l2) { m.l2.setAttribute("x", pick[1]); m.l2.setAttribute("dy", "1.15em"); }
+      (m.subs || []).forEach((e) => { e.setAttribute("x", pick[1]); e.setAttribute("dy", "1.15em"); });
       hardBoxes.push(pick[3]);
     }
   }
