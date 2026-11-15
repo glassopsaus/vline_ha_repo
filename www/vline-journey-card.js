@@ -5,8 +5,6 @@
  *
  *   type: custom:vline-journey-card
  *   title: Journey planner            # optional
- *   from: Ballarat                    # optional starting choices
- *   to: Southern Cross
  *   rows: 4                           # services to list
  *   entity: sensor.vline_network      # optional: live delays come from its vehicles
  *   journeys_url: /local/vline_journeys.json
@@ -34,12 +32,16 @@ const dur = (m) => (m >= 60 ? `${Math.floor(m / 60)} h ${m % 60 ? (m % 60) + " m
 
 const STYLE = `
 :host { display: block; }
-ha-card { padding: 16px; overflow: hidden; }
+ha-card { padding: 16px; overflow: hidden; color: var(--primary-text-color, #e1e1e1); }
+.title, .t, .in, .svc { color: var(--primary-text-color, #e1e1e1); }
 .title { font-size: 16px; font-weight: 600; margin-bottom: 10px; }
 .pick { display: grid; grid-template-columns: 1fr auto 1fr; gap: 8px; align-items: end; }
 label { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--secondary-text-color); margin-bottom: 3px; }
-select { width: 100%; box-sizing: border-box; font: inherit; font-size: 14px; padding: 9px 8px; border-radius: 10px; color: var(--primary-text-color);
-  background: var(--secondary-background-color, rgba(127,127,127,.12)); border: 1px solid var(--divider-color, rgba(127,127,127,.35)); }
+select { width: 100%; box-sizing: border-box; font: inherit; font-size: 14px; padding: 9px 8px; border-radius: 10px;
+  color: var(--primary-text-color, #e1e1e1); -webkit-text-fill-color: var(--primary-text-color, #e1e1e1);
+  background-color: var(--secondary-background-color, #2b2b2b); border: 1px solid var(--divider-color, rgba(127,127,127,.35)); }
+select option { color: var(--primary-text-color, #e1e1e1); background-color: var(--card-background-color, #1c1c1c); }
+select option[value=""] { color: var(--secondary-text-color, #9b9b9b); }
 select:focus { outline: 2px solid var(--primary-color); outline-offset: 1px; }
 button.swap { font: inherit; font-size: 16px; line-height: 1; padding: 9px 10px; border-radius: 10px; cursor: pointer; color: var(--primary-text-color);
   background: none; border: 1px solid var(--divider-color, rgba(127,127,127,.35)); }
@@ -70,11 +72,7 @@ class VLineJourneyCard extends HTMLElement {
   setConfig(config) {
     this._config = Object.assign({ title: "Journey planner", rows: 4, entity: "sensor.vline_network", journeys_url: "/local/vline_journeys.json" }, config || {});
     this._key = "vline-journey:" + (this._config.id || this._config.title) + ":" + (this._config.from || "") + ">" + (this._config.to || "");
-    this._from = this._config.from || ""; this._to = this._config.to || "";
-    try {
-      const saved = JSON.parse(localStorage.getItem(this._key) || "null");
-      if (saved) { this._from = saved.from || ""; this._to = saved.to || ""; }
-    } catch (e) { /* storage unavailable: use the configured defaults */ }
+    this._from = ""; this._to = "";   // every card starts at "Choose departure / arrival station"
     this._build();
     this._load();
   }
@@ -162,7 +160,7 @@ class VLineJourneyCard extends HTMLElement {
     this._renderAll();
   }
 
-  _save() { try { localStorage.setItem(this._key, JSON.stringify({ from: this._from, to: this._to })); } catch (e) { /* ignore */ } }
+  _save() { /* choices are not remembered: each visit starts blank */ }
 
   _fill(sel, names, current, placeholder) {
     sel.innerHTML = `<option value="">${esc(placeholder)}</option>` + names.map((n) => `<option value="${esc(n)}"${n === current ? " selected" : ""}>${esc(n)}</option>`).join("");
