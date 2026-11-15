@@ -2,7 +2,11 @@ name: Check V/Line + Victoria map
 
 on:
   push:
+    branches-ignore: [report]
   workflow_dispatch:       # "Run workflow" button on the Actions tab (use this from your phone)
+
+permissions:
+  contents: write      # lets the run publish the report branch
 
 jobs:
   check:
@@ -44,6 +48,21 @@ jobs:
       - name: Screenshots with live data
         if: steps.live.outputs.ran == '1'
         run: python tools/preview.py
+        continue-on-error: true
+
+      - name: Publish report page (branch "report")
+        if: always()
+        run: |
+          [ -f live_check.txt ] || echo "(no live check output)" > live_check.txt
+          python tools/make_report.py
+          cp -r report /tmp/report
+          git config user.name "github-actions"; git config user.email "actions@users.noreply.github.com"
+          git checkout --orphan report
+          git rm -rf -q . || true
+          cp -r /tmp/report/. .
+          git add README.md shots
+          git commit -qm "Live check report" && git push -f origin report
+          echo "Report: https://github.com/${{ github.repository }}/tree/report" | tee -a "$GITHUB_STEP_SUMMARY"
         continue-on-error: true
 
       - uses: actions/upload-artifact@v4
