@@ -41,8 +41,18 @@ def build_light_network(zf):
 
     wanted = {t for _n, t, _s in rep.values()}
     calls = {}
+    ends = {}                      # trip_id -> [first_seq, first_stop, last_seq, last_stop]
     for r in _rows(zf, "stop_times.txt"):
         t = r["trip_id"]
+        if t in trip_route:
+            q = int(r["stop_sequence"])
+            e = ends.get(t)
+            if e is None:
+                ends[t] = [q, r["stop_id"], q, r["stop_id"]]
+            elif q < e[0]:
+                e[0], e[1] = q, r["stop_id"]
+            elif q > e[2]:
+                e[2], e[3] = q, r["stop_id"]
         if t in wanted:
             calls.setdefault(t, []).append((int(r["stop_sequence"]), r["stop_id"]))
     for c in calls.values():
@@ -93,7 +103,21 @@ def build_light_network(zf):
     lines = [ln for ln in lines if best[ln["name"].lower()] is ln]
     for i, ln in enumerate(lines):
         ln["color"] = ln["gtfs_color"] or PALETTE[i % len(PALETTE)]
+    od_names, od_idx = [], {}
+
+    def ni(stop_id):
+        s = stops.get(stop_id)
+        if not s:
+            return -1
+        n = _clean_name(stops.get(s.get("parent_station") or "", s)["stop_name"])
+        if n not in od_idx:
+            od_idx[n] = len(od_names)
+            od_names.append(n)
+        return od_idx[n]
+
+    trip_od = {t: [ni(e[1]), ni(e[3])] for t, e in ends.items() if trip_route.get(t) in redirect}
     return {
+        "od_names": od_names, "trip_od": trip_od,
         "lines": lines, "sched": {}, "has_shapes": bool(shapes),
         "trip_route": {t: redirect[r] for t, r in trip_route.items() if r in redirect},
         "route_alias": {route_key(r): k for r, k in redirect.items() if route_key(r)},
