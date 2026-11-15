@@ -326,7 +326,8 @@ class VLineNetworkCard extends HTMLElement {
             if (this._official && Math.abs(v[1]) < 1e-6) {
               // Horizontal run: main station names sit just below-right of their markers, always in the same place,
               // so stretch the run until each main name fits clear of the next main name along the line.
-              const wOf = (nm) => (8 + nm.length * 7.7 + 16) * (this._U || 2.2);
+              const U0 = this._U || 2.2, wOf = (nm) => (8 + nm.length * 7.4 + 12) * U0;
+              if (!isMaj(names[j], j)) d = Math.min(d, 14 * U0);   // stations with no name shown take almost no room
               if (!hm && isMaj(names[j - 1], j - 1)) hm = { x: pos[0], nm: names[j - 1] };
               if (hm && isMaj(names[j], j)) {
                 d = v[0] > 0 ? Math.max(d, hm.x + wOf(hm.nm) - pos[0]) : Math.max(d, wOf(names[j]) - (hm.x - pos[0]));
@@ -464,6 +465,7 @@ class VLineNetworkCard extends HTMLElement {
     this._vb = { ...f };
     const svg = root.querySelector("#svg");
     this._svg = svg;
+    svg.addEventListener("click", () => { if (this._pick) { this._pick = null; this._rowSig = ""; this._update(); } });   // click empty map: close the train bubble
     const gl = svgEl("g", { id: "lines" });
     const gs = svgEl("g", { id: "labels" });
     const gt = svgEl("g", { id: "trains" });
@@ -812,19 +814,26 @@ class VLineNetworkCard extends HTMLElement {
       const brg = num(v.brg);
       m.body.style.display = brg === null ? "none" : "";
       m.dot.style.display = brg === null ? "" : "none";
-      // A small bubble with the service number; click the train to expand it to origin -> destination.
-      const tlm = String(this._config.train_labels || "always").toLowerCase();
+      // Train icon only; click a train to open its bubble: service, origin -> destination, scheduled arrival, live difference.
       const picked = this._pick === v.id;
-      const showTl = tlm !== "off" && (tlm === "always" || this._sel || picked);
-      const num1 = v.no || (v.to ? "to " + v.to : "");
-      const sub = picked && v.from && v.to ? `${v.from} \u2192 ${v.to}` : picked && v.to ? "to " + v.to : "";
+      if (picked && this._gt.lastChild !== m.g) this._gt.append(m.g);   // keep the open bubble on top
       m.tl.textContent = "";
-      if (showTl && num1) {
-        m.tl.setAttribute("y", sub ? -17 : -9);
-        const a = svgEl("tspan", { x: -14, style: "font-weight:700" }); a.textContent = num1; m.tl.append(a);
-        if (sub) { const b = svgEl("tspan", { x: -14, dy: "1.2em" }); b.textContent = sub; m.tl.append(b); }
-        const w = Math.max(num1.length * 6, sub.length * 5.2) + 10, h = sub ? 27 : 15;
-        m.bub.setAttribute("x", -14 - w + 5); m.bub.setAttribute("y", (sub ? -17 : -9) - 11);
+      if (picked && String(this._config.train_labels || "click").toLowerCase() !== "off") {
+        const dm = v.delay_min;
+        const diff = dm === null || dm === undefined ? "" : dm >= 1 ? `${dm} min late` : dm <= -1 ? `${-dm} min early` : "on time";
+        const rows = [
+          [(v.no ? v.no + " \u00B7 " : "") + (v.from && v.to ? `${v.from} \u2192 ${v.to}` : v.to ? "to " + v.to : ""), true],
+          [[v.arr ? "Arrives " + v.arr : "", diff].filter(Boolean).join("  \u00B7  "), false],
+        ].filter((r) => r[0]);
+        const y0 = -9 - (rows.length - 1) * 12;
+        m.tl.setAttribute("y", y0);
+        rows.forEach((r, k) => {
+          const a = svgEl("tspan", { x: -14, style: r[1] ? "font-weight:700" : "" });
+          if (k) a.setAttribute("dy", "1.3em");
+          a.textContent = r[0]; m.tl.append(a);
+        });
+        const w = Math.max(...rows.map((r) => r[0].length)) * 5.4 + 12, h = rows.length * 12 + 6;
+        m.bub.setAttribute("x", -14 - w + 6); m.bub.setAttribute("y", y0 - 11);
         m.bub.setAttribute("width", w); m.bub.setAttribute("height", h); m.bub.style.display = "block";
       } else m.bub.style.display = "none";
       const d = v.delay_min;
