@@ -17,6 +17,18 @@ views:
             entity: sensor.vline_ballan_to_southern_cross
             title: Ballan to Southern Cross
             direction: rtl     # trains from Ballarat arrive right to left (eastbound)
+      - type: grid            # two journey planners: pick any From / To (the second list only offers direct-service stations)
+        columns: 2
+        square: false
+        cards:
+          - type: custom:vline-journey-card
+            title: Journey planner
+            from: Ballarat
+            to: Southern Cross
+          - type: custom:vline-journey-card
+            title: Journey planner
+            from: Southern Cross
+            to: Bendigo
 
   - title: V/Line Network
     path: vline-network
