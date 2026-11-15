@@ -117,12 +117,19 @@ text.lbl tspan.sub { font-weight: 500; fill: var(--secondary-text-color, #666); 
 .tr.lab text.lbl { display: block; }
 .tr.lab .dly { display: none; }
 .tr.short text.lbl tspan.sub { display: none; }
+.tr rect.bub { display: none; fill: var(--card-background-color, #fff); stroke: var(--c, #666); stroke-width: 1.5px; vector-effect: non-scaling-stroke; pointer-events: all; cursor: pointer; }
+.tr.lab rect.bub { display: block; }
+.tr.picked rect.bub { stroke-width: 2.5px; }
 text.lbl tspan.n { font-weight: 700; }
 .stn text { display: none; }
 .stn.lab text { display: block; }
 .tr { transition: transform 1s linear; cursor: pointer; }
 .zooming .tr, .drag .tr { transition: none; }
 .tr .body { stroke: #fff; stroke-width: 2px; vector-effect: non-scaling-stroke; fill: var(--c); }
+.tr .body .win { fill: var(--paper, #fff); stroke: var(--paper, #fff); stroke-width: 0; }
+.tr .body path.shape { stroke: var(--paper, #fff); stroke-width: 1.5px; vector-effect: non-scaling-stroke; }
+.tr .body { stroke: none; }
+.tr .body .jt { fill: none; stroke: var(--paper, #fff); stroke-width: 1px; vector-effect: non-scaling-stroke; }
 .tr.dim { opacity: .3; }
 .tr .ring { display: none; fill: none; stroke: #222; stroke-width: 1.5px; vector-effect: non-scaling-stroke; }
 .tr.picked .ring { display: block; }
@@ -718,24 +725,26 @@ class VicNetworkCard extends HTMLElement {
       if (!m) {
         const g = svgEl("g", { class: "tr" });
         const inner = svgEl("g", { class: "u" });
-        const body = svgEl("path", { class: "body", d: "M0,-9 L6.5,7 L0,3.5 L-6.5,7 Z" });
+        const body = svgEl("g", { class: "body" });   // small top-down train: rounded nose, windscreen, two car joints
+        body.append(svgEl("path", { class: "shape", d: "M-5.3,12 V-6.8 Q-5.3,-12.8 0,-12.8 Q5.3,-12.8 5.3,-6.8 V12 Z" }),
+          svgEl("path", { class: "win", d: "M-3.6,-6.9 Q-3.6,-9.9 0,-9.9 Q3.6,-9.9 3.6,-6.9 Z" }),
+          svgEl("path", { class: "jt", d: "M-5.3,2 H5.3 M-5.3,7 H5.3" }));
         const dot = svgEl("circle", { class: "body", r: 5 });
         const ring = svgEl("circle", { class: "ring", r: 10 });
         const t = svgEl("text", { class: "dly", x: 9, y: 4 });
         const lbl = svgEl("text", { class: "lbl", x: 11, y: -3 });
-        inner.append(ring, body, dot, t, lbl);
+        const bub = svgEl("rect", { class: "bub", rx: 8, ry: 8 });
+        inner.append(ring, body, dot, t, bub, lbl);
         g.append(inner);
         g.addEventListener("click", (e) => {
           e.stopPropagation();
           const was = this._pick === key;
-          const lk = m.v._src + "|" + m.v.line;
-          if (this._sel !== lk) this._select(lk);
           this._pick = was ? null : key;
           this._rowSig = "";
           this._update();
         });
         this._gt.append(g);
-        m = { g, body, dot, t, lbl, sig: "", w: 0 };
+        m = { g, body, dot, t, lbl, bub, sig: "", w: 0 };
         this._markers.set(key, m);
       }
       m.v = v;
@@ -814,7 +823,7 @@ class VicNetworkCard extends HTMLElement {
     };
     for (const [key, m] of items) {
       let pick = null, compact = false;
-      for (const c of [false, true]) {
+      for (const c of (key === this._pick ? [false, true] : [true])) {   // service-number bubble only, until the train is clicked
         const cs = spots(m, c).filter((q) => !hardHit(q[3]));
         pick = cs.find((q) => !softHits(q[3]).length) || cs[0] || null;
         if (pick) { compact = c; break; }
@@ -825,6 +834,9 @@ class VicNetworkCard extends HTMLElement {
       m.g.classList.toggle("short", !!pick && compact);
       if (!pick) continue;
       softHits(pick[3]).forEach((sl) => sl.s.outer.classList.remove("lab"));
+      const bx = pick[3];
+      m.bub.setAttribute("x", (bx[0] - m.px - 3).toFixed(1)); m.bub.setAttribute("y", (bx[1] - m.py - 1).toFixed(1));
+      m.bub.setAttribute("width", (bx[2] - bx[0] + 6).toFixed(1)); m.bub.setAttribute("height", (bx[3] - bx[1] + 3).toFixed(1));
       m.lbl.setAttribute("text-anchor", pick[0]); m.lbl.setAttribute("y", pick[2]); m.lbl.setAttribute("x", pick[1]);
       if (m.l1) { m.l1.setAttribute("x", pick[1]); }
       if (m.l2) { m.l2.setAttribute("x", pick[1]); m.l2.setAttribute("dy", "1.15em"); }
