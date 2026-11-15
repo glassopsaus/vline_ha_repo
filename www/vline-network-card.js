@@ -139,7 +139,7 @@ class VLineNetworkCard extends HTMLElement {
       geometry_url: "/local/vline_network.json",
       title: "V/Line network",
       train_labels: "always",   // always | zoom | off  (number, origin and destination beside each train)
-      headings: "compass",   // compass = true bearings from Melbourne; official = V/Line map headings
+      headings: "official",   // official = V/Line map headings (tube-map octants); compass = exact true bearings from Melbourne
     }, config || {});
     this._official = String(this._config.headings).toLowerCase() === "official";
     this._render();
@@ -316,18 +316,24 @@ class VLineNetworkCard extends HTMLElement {
           if (ov) { if (ov.then !== undefined && rem > 1) { d2 = ov.then; bend = k + Math.max(1, Math.floor(rem * 0.4)); } }
           else if (Math.abs(off) > 15 && rem > 2) { d2 = (d1 + (off > 0 ? 1 : 7)) % 8; bend = k + 1 + Math.max(1, Math.floor(rem * 0.45)); }
           let pos = [o.x, o.y];
+          let hm = null;   // previous main station along the current horizontal run
+          const isMaj = (nm, idx) => idx === 0 || idx === names.length - 1 || MAJOR_RANK.some((r) => String(nm).toLowerCase().startsWith(r));
           for (let j = k + 1; j < names.length; j++) {
             const dir = j <= bend ? d1 : d2;
             // Compass mode: a straight ray at the exact true bearing, stations spaced by real distance (no octant snapping, no squashing).
             const v = this._official ? vec(dir) : [Math.sin((tb * Math.PI) / 180), -Math.cos((tb * Math.PI) / 180)];
             let d = this._official ? step(ln._km[j - 1], ln._km[j]) : Math.max(6, 3 * (ln._ss[j] - ln._ss[j - 1]));
             if (this._official && Math.abs(v[1]) < 1e-6) {
-              // Horizontal run: the name sits to the right of its marker, so the gap to the neighbour on that side
-              // must hold the whole name (plus a margin) at the current drawing scale.
-              const lab = names[v[0] < 0 ? j : j - 1];
-              d = Math.max(d, (8 + lab.length * 7.7 + 14) * (this._U || 2.2));
-            }
+              // Horizontal run: main station names sit just below-right of their markers, always in the same place,
+              // so stretch the run until each main name fits clear of the next main name along the line.
+              const wOf = (nm) => (8 + nm.length * 7.7 + 16) * (this._U || 2.2);
+              if (!hm && isMaj(names[j - 1], j - 1)) hm = { x: pos[0], nm: names[j - 1] };
+              if (hm && isMaj(names[j], j)) {
+                d = v[0] > 0 ? Math.max(d, hm.x + wOf(hm.nm) - pos[0]) : Math.max(d, wOf(names[j]) - (hm.x - pos[0]));
+              }
+            } else hm = null;
             pos = [pos[0] + v[0] * d, pos[1] + v[1] * d];
+            if (this._official && Math.abs(v[1]) < 1e-6 && isMaj(names[j], j)) hm = { x: pos[0], nm: names[j] };
             if (!placed.has(key(names[j]))) placed.set(key(names[j]), { x: pos[0], y: pos[1], dir, ln });
             ln._sx.push([pos[0], pos[1]]);
           }
@@ -558,7 +564,8 @@ class VLineNetworkCard extends HTMLElement {
       const side = Math.sign(pref[0]);
       const vo = side === 0 ? [0] : (side > 0 ? [16, 14, 26, 40] : [-16, -14, -26, -40]).filter((v) => true);
       const cand = side === 0 ? [0] : pref.filter((v) => Math.sign(v) === side || v === 0).concat(vo.filter((v) => !pref.includes(v)));
-      for (const strict of [true, false]) for (const dx of [0, 10, 22]) for (const off of cand) {
+      const flat = pref.length === 2 && pref[0] === 16 && pref[1] === -16;   // horizontal run: one fixed slot, just below-right
+      for (const strict of [true, false]) for (const dx of (flat ? [0] : [0, 10, 22])) for (const off of (flat ? [16] : cand)) {
         if (!strict && !isEnd) continue;
         const box = { x: x + (8 + dx) * u, y: y + off * u - h / 2, w, h };
         if (box.x + box.w > view.x + view.w - 2 * u || hit(box) || (strict && onLine(box))) continue;
