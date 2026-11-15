@@ -90,7 +90,7 @@ text.lbl.mel { font-weight: 800; font-size: 12px; }
 .tr .ring { display: none; fill: none; stroke: var(--primary-text-color); stroke-width: 1.5px; vector-effect: non-scaling-stroke; }
 rect.bub { display: none; fill: var(--paper); stroke: var(--c); stroke-width: 1.5px; vector-effect: non-scaling-stroke; cursor: pointer; }
 .tr.picked rect.bub { stroke-width: 2.5px; }
-text.tlbl { font-size: 9px; font-weight: 600; fill: var(--ink); pointer-events: none; }
+text.tlbl { font-size: 10px; font-weight: 600; fill: var(--ink); pointer-events: none; }
 text.dly { font-size: 10px; font-weight: 700; fill: var(--c); paint-order: stroke; stroke: var(--paper); stroke-width: 3px; pointer-events: none; }
 .rows { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; padding: 8px 12px 6px; }
 .row { display: block; width: 100%; box-sizing: border-box; text-align: left; background: none; color: inherit; font: inherit; min-width: 0;
@@ -316,8 +316,6 @@ class VLineNetworkCard extends HTMLElement {
           if (ov) { if (ov.then !== undefined && rem > 1) { d2 = ov.then; bend = k + Math.max(1, Math.floor(rem * 0.4)); } }
           else if (Math.abs(off) > 15 && rem > 2) { d2 = (d1 + (off > 0 ? 1 : 7)) % 8; bend = k + 1 + Math.max(1, Math.floor(rem * 0.45)); }
           let pos = [o.x, o.y];
-          let hm = null;   // previous main station along the current horizontal run
-          const isMaj = (nm, idx) => idx === 0 || idx === names.length - 1 || MAJOR_RANK.some((r) => String(nm).toLowerCase().startsWith(r));
           for (let j = k + 1; j < names.length; j++) {
             const dir = j <= bend ? d1 : d2;
             // Compass mode: a straight ray at the exact true bearing, stations spaced by real distance (no octant snapping, no squashing).
@@ -326,15 +324,10 @@ class VLineNetworkCard extends HTMLElement {
             if (this._official && Math.abs(v[1]) < 1e-6) {
               // Horizontal run: main station names sit just below-right of their markers, always in the same place,
               // so stretch the run until each main name fits clear of the next main name along the line.
-              const U0 = this._U || 2.2, wOf = (nm) => (8 + nm.length * 7.4 + 12) * U0;
-              if (!isMaj(names[j], j)) d = Math.min(d, 14 * U0);   // stations with no name shown take almost no room
-              if (!hm && isMaj(names[j - 1], j - 1)) hm = { x: pos[0], nm: names[j - 1] };
-              if (hm && isMaj(names[j], j)) {
-                d = v[0] > 0 ? Math.max(d, hm.x + wOf(hm.nm) - pos[0]) : Math.max(d, wOf(names[j]) - (hm.x - pos[0]));
-              }
-            } else hm = null;
+              const lab = names[v[0] < 0 ? j : j - 1];
+              if ((this.clientWidth || 800) >= 640) d = Math.max(d, (8 + lab.length * 7.7 + 14) * Math.min(this._U || 2.2, 2.4));   // capped: on a narrow card names are thinned out instead of stretching the map
+            }
             pos = [pos[0] + v[0] * d, pos[1] + v[1] * d];
-            if (this._official && Math.abs(v[1]) < 1e-6 && isMaj(names[j], j)) hm = { x: pos[0], nm: names[j] };
             if (!placed.has(key(names[j]))) placed.set(key(names[j]), { x: pos[0], y: pos[1], dir, ln });
             ln._sx.push([pos[0], pos[1]]);
           }
@@ -397,10 +390,10 @@ class VLineNetworkCard extends HTMLElement {
         const pick = rest.splice(Math.floor(rest.length / (3 - have + 1)), 1)[0];
         if (pick) { pick.major = true; have++; }
       }
-      ln._st.forEach((q) => { if (q.end) maxx = Math.max(maxx, q.x + 30 + q.name.length * 7.4 * 2.4 - 220); });
+      ln._st.forEach((q) => { if (q.end || q.major || q.ix) maxx = Math.max(maxx, q.x + (14 + q.name.length * 8) * (this._U || 2.4)); });   // names must never run off the right edge
       ln._sx.forEach((q) => { minx = Math.min(minx, q[0]); maxx = Math.max(maxx, q[0]); miny = Math.min(miny, q[1]); maxy = Math.max(maxy, q[1]); });
     });
-    const padX = 220, padY = 90;
+    const padX = 40, padY = 140;
     this._full = { x: minx - padX, y: miny - padY, w: Math.max(maxx - minx + 2 * padX, 300), h: Math.max(maxy - miny + 2 * padY, 200) };
     this._hubDirs = hubDirs;
     this._mel = null;
@@ -822,17 +815,19 @@ class VLineNetworkCard extends HTMLElement {
         const dm = v.delay_min;
         const diff = dm === null || dm === undefined ? "" : dm >= 1 ? `${dm} min late` : dm <= -1 ? `${-dm} min early` : "on time";
         const rows = [
-          [(v.no ? v.no + " \u00B7 " : "") + (v.from && v.to ? `${v.from} \u2192 ${v.to}` : v.to ? "to " + v.to : ""), true],
-          [[v.arr ? "Arrives " + v.arr : "", diff].filter(Boolean).join("  \u00B7  "), false],
+          [v.no ? `Service ${v.no}` : "Train", true],
+          [v.from && v.to ? `${v.from} \u2192 ${v.to}` : v.to ? "to " + v.to : "", false],
+          [v.arr ? `Scheduled arrival ${v.arr}` : "", false],
+          [diff ? `${diff}${dm === null || dm === undefined ? "" : " (live)"}` : "", true],
         ].filter((r) => r[0]);
-        const y0 = -9 - (rows.length - 1) * 12;
+        const y0 = -9 - (rows.length - 1) * 13;
         m.tl.setAttribute("y", y0);
         rows.forEach((r, k) => {
           const a = svgEl("tspan", { x: -14, style: r[1] ? "font-weight:700" : "" });
           if (k) a.setAttribute("dy", "1.3em");
           a.textContent = r[0]; m.tl.append(a);
         });
-        const w = Math.max(...rows.map((r) => r[0].length)) * 5.4 + 12, h = rows.length * 12 + 6;
+        const w = Math.max(...rows.map((r) => r[0].length)) * 5.9 + 14, h = rows.length * 13 + 8;
         m.bub.setAttribute("x", -14 - w + 6); m.bub.setAttribute("y", y0 - 11);
         m.bub.setAttribute("width", w); m.bub.setAttribute("height", h); m.bub.style.display = "block";
       } else m.bub.style.display = "none";
