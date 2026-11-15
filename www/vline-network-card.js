@@ -317,7 +317,10 @@ class VLineNetworkCard extends HTMLElement {
           for (let j = k + 1; j < names.length; j++) {
             const dir = j <= bend ? d1 : d2;
             const v = vec(dir);
-            const d = step(ln._km[j - 1], ln._km[j]);
+            let d = step(ln._km[j - 1], ln._km[j]);
+            // Ballarat / Ararat / Wendouree trunk: its many close stations would squash together on the horizontal,
+            // so give each the full spacing the Warrnambool line gets (104), leaving room for the names.
+            if (Math.abs(v[1]) < 1e-6 && /^(ararat|wendouree|ballarat|maryborough)/i.test(names[names.length - 1])) d = 104;
             pos = [pos[0] + v[0] * d, pos[1] + v[1] * d];
             if (!placed.has(key(names[j]))) placed.set(key(names[j]), { x: pos[0], y: pos[1], dir, ln });
             ln._sx.push([pos[0], pos[1]]);
