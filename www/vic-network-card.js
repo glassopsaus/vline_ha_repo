@@ -762,15 +762,17 @@ class VicNetworkCard extends HTMLElement {
       const l1 = `${v.no || ""}${d !== null && d !== undefined && d >= 5 ? ` +${d}` : ""}`.trim();
       const l2 = v.from && v.to ? `${v.from} \u2192 ${v.to}` : v.to ? `to ${v.to}` : v.from ? `from ${v.from}` : "";
       const diff = d === null || d === undefined ? "" : d >= 1 ? `${d} min late` : d <= -1 ? `${-d} min early` : "on time";
-      const l3 = [v.arr ? `Arrives ${v.arr}` : "", diff].filter(Boolean).join(" \u00B7 ");
-      if (m.sig !== l1 + "|" + l2 + "|" + l3) {
-        m.sig = l1 + "|" + l2 + "|" + l3;
+      const l1b = v.no ? `Service ${v.no}` : (v.label || "Train");
+      const l3 = v.arr ? `Scheduled arrival ${v.arr}` : "";
+      const l4 = diff ? `${diff}${d === null || d === undefined ? "" : " (live)"}` : "";
+      if (m.sig !== l1b + "|" + l2 + "|" + l3 + "|" + l4) {
+        m.sig = l1b + "|" + l2 + "|" + l3 + "|" + l4;
         m.lbl.textContent = "";
-        const a = svgEl("tspan", { class: "n" }); a.textContent = l1 || (v.label || "Train");
+        const a = svgEl("tspan", { class: "n" }); a.textContent = l1b;
         m.lbl.append(a);
-        for (const t of [l2, l3]) if (t) { const b = svgEl("tspan", { class: "sub" }); b.textContent = t; m.lbl.append(b); }
+        for (const t of [l2, l3, l4]) if (t) { const b = svgEl("tspan", { class: "sub" }); b.textContent = t; m.lbl.append(b); }
         m.l1 = a; m.subs = [...m.lbl.querySelectorAll(".sub")];
-        m.w = Math.max(l1.length * 6.6, l2.length * 5.6, l3.length * 5.6) + 6;
+        m.w = Math.max(l1b.length * 6.6, l2.length * 5.6, l3.length * 5.6, l4.length * 5.6) + 6;
         m.lines = 1 + m.subs.length;
       }
       // schematic position follows the real position along the line; direction from the bearing
@@ -814,7 +816,7 @@ class VicNetworkCard extends HTMLElement {
     const hardHit = (bx) => hardBoxes.some((o) => ov(bx, o));
     const softHits = (bx) => soft.filter((sl) => sl.s.outer.classList.contains("lab") && ov(bx, sl.box));
     const spots = (m, compact) => {
-      const w = compact ? (m.l1 ? m.l1.textContent.length * 6.6 + 6 : 30) : m.w, ln = compact ? 1 : m.lines, h = ln * LH + 5, x = m.px, y = m.py;
+      const w = compact ? (m.l1 ? m.l1.textContent.length * 6.6 + 6 : 30) : m.w, ln = compact ? 1 : m.lines, h = ln * LH + 9, x = m.px, y = m.py;
       const y0 = -(2 + ln * 10.5);
       return [["start", 11, -3, [x + 10, y - 13, x + 10 + w, y - 13 + h]], ["end", -11, -3, [x - 10 - w, y - 13, x - 10, y - 13 + h]],
         ["middle", 0, y0, [x - w / 2, y - 12 - h, x + w / 2, y - 11]], ["middle", 0, 18, [x - w / 2, y + 8, x + w / 2, y + 8 + h]]];
