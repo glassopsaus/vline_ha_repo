@@ -1,5 +1,5 @@
 /*
- * vline-network-card  v3.10.0
+ * vline-network-card  v3.11.0
  * Live schematic (tube-map style: straight lines at 45-degree angles) map of the V/Line network: every line, trains as moving markers,
  * and an overall status for each line. Tap a line (map or list) to zoom to it.
  *
@@ -84,6 +84,7 @@ text.lbl.mel { font-weight: 800; font-size: 12px; }
 .tr.dim { opacity: .25; }
 .tr.picked .ring { display: block; }
 .tr .ring { display: none; fill: none; stroke: var(--primary-text-color); stroke-width: 1.5px; vector-effect: non-scaling-stroke; }
+text.tlbl { font-size: 9px; font-weight: 600; fill: var(--ink); paint-order: stroke; stroke: var(--paper); stroke-width: 3px; pointer-events: none; }
 text.dly { font-size: 10px; font-weight: 700; fill: var(--c); paint-order: stroke; stroke: var(--paper); stroke-width: 3px; pointer-events: none; }
 .rows { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; padding: 8px 12px 6px; }
 .row { display: block; width: 100%; box-sizing: border-box; text-align: left; background: none; color: inherit; font: inherit; min-width: 0;
@@ -131,7 +132,10 @@ class VLineNetworkCard extends HTMLElement {
       entity: "sensor.vline_network",
       geometry_url: "/local/vline_network.json",
       title: "V/Line network",
+      train_labels: "always",   // always | zoom | off  (number, origin and destination beside each train)
+      headings: "compass",   // compass = true bearings from Melbourne; official = V/Line map headings
     }, config || {});
+    this._official = String(this._config.headings).toLowerCase() === "official";
     this._render();
   }
 
@@ -272,7 +276,7 @@ class VLineNetworkCard extends HTMLElement {
           const tb = bearing(ln._km[k], ln._km[names.length - 1]);
           let d1 = Math.round(tb / 45) % 8;
           const atHub = (isHub(names[k]) && o.dir === null) || (o.x === 0 && o.y === 0);
-          const ov = (OFFICIAL.find((r) => r[0].test(names[names.length - 1])) || [])[1];
+          const ov = this._official ? (OFFICIAL.find((r) => r[0].test(names[names.length - 1])) || [])[1] : undefined;   // default: true compass bearings
           if (atHub) {
             if (ov) d1 = ov.o;
             else if (forced && forced.has(ln)) d1 = forced.get(ln);
@@ -308,9 +312,10 @@ class VLineNetworkCard extends HTMLElement {
           let pos = [o.x, o.y];
           for (let j = k + 1; j < names.length; j++) {
             const dir = j <= bend ? d1 : d2;
-            const v = vec(dir);
-            let d = step(ln._km[j - 1], ln._km[j]);
-            if (Math.abs(v[1]) < 1e-6) {
+            // Compass mode: a straight ray at the exact true bearing, stations spaced by real distance (no octant snapping, no squashing).
+            const v = this._official ? vec(dir) : [Math.sin((tb * Math.PI) / 180), -Math.cos((tb * Math.PI) / 180)];
+            let d = this._official ? step(ln._km[j - 1], ln._km[j]) : Math.max(6, 3 * (ln._ss[j] - ln._ss[j - 1]));
+            if (this._official && Math.abs(v[1]) < 1e-6) {
               // Horizontal run: the name sits to the right of its marker, so the gap to the neighbour on that side
               // must hold the whole name (plus a margin) at the current drawing scale.
               const lab = names[v[0] < 0 ? j : j - 1];
@@ -769,7 +774,8 @@ class VLineNetworkCard extends HTMLElement {
         const dot = svgEl("circle", { class: "body", r: 5 });
         const ring = svgEl("circle", { class: "ring", r: 10 });
         const t = svgEl("text", { class: "dly", x: 9, y: 4 });
-        inner.append(ring, body, dot, t);
+        const tl = svgEl("text", { class: "tlbl", x: -10, y: -9, "text-anchor": "end" });
+        inner.append(ring, body, dot, t, tl);
         g.append(inner);
         g.addEventListener("click", (e) => {
           e.stopPropagation();
@@ -781,7 +787,7 @@ class VLineNetworkCard extends HTMLElement {
           this._update();
         });
         this._gt.append(g);
-        m = { g, inner, body, dot, t };
+        m = { g, inner, body, dot, t, tl };
         this._markers.set(v.id, m);
       }
       m.v = v;
@@ -790,6 +796,9 @@ class VLineNetworkCard extends HTMLElement {
       const brg = num(v.brg);
       m.body.style.display = brg === null ? "none" : "";
       m.dot.style.display = brg === null ? "" : "none";
+      const tlm = String(this._config.train_labels || "always").toLowerCase();
+      const showTl = tlm === "always" || (tlm === "zoom" && (this._sel || this._pick === v.id));
+      m.tl.textContent = showTl && (v.no || v.to) ? [v.no, v.from && v.to ? `${v.from} \u2192 ${v.to}` : (v.to ? "to " + v.to : "")].filter(Boolean).join("  ") : "";
       const d = v.delay_min;
       m.t.textContent = d !== null && d !== undefined && d >= 5 ? `+${d}` : "";
       const ln = this._geo.lines.find((l) => l.id === v.line);
