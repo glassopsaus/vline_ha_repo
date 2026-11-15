@@ -19,7 +19,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, "out")
 WWW = os.path.join(ROOT, "www")
 
-PAGE = """<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
+PAGE = """<!doctype html><meta charset=utf-8><title>Victorian trains: live</title><meta name=viewport content="width=device-width,initial-scale=1">
 <style>
 body{margin:0;padding:12px;font-family:system-ui,sans-serif;background:#f2f3f5;--card-background-color:#fff;--primary-text-color:#1c1c1e;
 --secondary-text-color:#6b6b70;--divider-color:#8885;--primary-color:#0a64d6;--success-color:#2e7d4f;--warning-color:#a86200;--error-color:#c62d2a}
@@ -41,15 +41,21 @@ const show=()=>{const t=(location.hash||"#victoria").slice(1);
   document.querySelectorAll(".pane").forEach(e=>e.classList.toggle("on",e.id===t));
   document.querySelectorAll("nav a").forEach(e=>e.classList.toggle("on",e.dataset.t===t));};
 addEventListener("hashchange",show);show();
-fetch("/local/sensors.json").then(r=>r.json()).then(s=>{
-  const st={}, now=new Date().toISOString();
-  for (const k in s) st[k]={state:String(s[k].state),last_updated:now,attributes:s[k].attributes};
-  const g=id=>document.getElementById(id);
-  g("a").setConfig({}); g("b").setConfig({title:"V/Line network"});
-  g("c").setConfig({entity:"sensor.vline_ballan_to_ballarat",title:"Ballan to Ballarat"});
-  g("d").setConfig({entity:"sensor.vline_ballan_to_southern_cross",title:"Ballan to Southern Cross"});
-  for (const id of ["a","b","c","d"]) g(id).hass={states:st};
-});
+const g=id=>document.getElementById(id);
+let first=true;
+async function load(){
+  try{
+    const s=await (await fetch("/local/sensors.json?t="+Date.now(),{cache:"no-store"})).json();
+    const st={}, now=new Date().toISOString();
+    for (const k in s) st[k]={state:String(s[k].state),last_updated:now,attributes:s[k].attributes};
+    if(first){first=false;
+      g("a").setConfig({}); g("b").setConfig({title:"V/Line network"});
+      g("c").setConfig({entity:"sensor.vline_ballan_to_ballarat",title:"Ballan to Ballarat"});
+      g("d").setConfig({entity:"sensor.vline_ballan_to_southern_cross",title:"Ballan to Southern Cross"});}
+    for (const id of ["a","b","c","d"]) g(id).hass={states:st};
+  }catch(e){console.error(e)}
+}
+load(); setInterval(load,60000);
 </script>"""
 
 

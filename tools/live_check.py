@@ -72,6 +72,7 @@ def key_check(key):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default=os.path.join(ROOT, "out"))
+    ap.add_argument("--reuse", action="store_true", help="reuse timetable files in out/work if less than ~20 h old")
     o = ap.parse_args()
     key = os.environ.get("VLINE_API_KEY", "").strip().strip("\"'").strip()
     if not key:
@@ -91,7 +92,7 @@ def main():
         "network_json_path": f"{out}/vline_network.json",
         "routes": [{"id": "ballan_to_ballarat", "name": "Ballan to Ballarat", "from_name": "Ballan", "to_name": "Ballarat"},
                    {"id": "ballan_to_southern_cross", "name": "Ballan to Southern Cross", "from_name": "Ballan", "to_name": "Southern Cross"}]})
-    reg.initialize(); reg._refresh_worker(True)
+    reg.initialize(); reg._refresh_worker(not o.reuse)
     if not reg.net:
         problems.append("regional network failed to build")
     else:
@@ -102,7 +103,7 @@ def main():
     met = metro_network.MetroNetwork({
         "api_key": key, "static_gtfs_url": URL, "static_gtfs_path": f"{work}/metro.zip",
         "network_cache_path": f"{work}/mnet.json", "network_json_path": f"{out}/vic_metro_network.json"})
-    met.initialize(); met._refresh(True)
+    met.initialize(); met._refresh(not o.reuse)
     if not met.net:
         problems.append("metro network failed to build")
     else:
