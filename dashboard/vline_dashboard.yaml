@@ -6,20 +6,25 @@ views:
     path: ballan
     icon: mdi:train-variant
     cards:
-      - type: custom:vline-train-card
-        entity: sensor.vline_ballan_to_ballarat
-        title: Ballan to Ballarat
-      - type: custom:vline-train-card
-        entity: sensor.vline_ballan_to_southern_cross
-        title: Ballan to Southern Cross
+      - type: grid            # two route cards side by side
+        columns: 2
+        square: false
+        cards:
+          - type: custom:vline-train-card
+            entity: sensor.vline_ballan_to_ballarat
+            title: Ballan to Ballarat
+          - type: custom:vline-train-card
+            entity: sensor.vline_ballan_to_southern_cross
+            title: Ballan to Southern Cross
+            direction: rtl     # trains from Ballarat arrive right to left (eastbound)
 
   - title: V/Line Network
     path: vline-network
     icon: mdi:train
-    panel: true            # V/Line lines at their true positions on a map of Victoria
+    panel: true            # straight tube-map lines, each leaving Melbourne on its true compass bearing, plain background
     cards:
-      - type: custom:vic-network-card
-        basemap: geo
+      - type: custom:vline-network-card
+        headings: compass      # compass = true bearings from Melbourne; official = V/Line map headings
         train_labels: always   # always | zoom | off   (number, origin and destination beside each train)
 
   - title: Full Victorian Network
