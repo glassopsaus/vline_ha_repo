@@ -25,16 +25,30 @@ body{margin:0;padding:12px;font-family:system-ui,sans-serif;background:#f2f3f5;-
 --secondary-text-color:#6b6b70;--divider-color:#8885;--primary-color:#0a64d6;--success-color:#2e7d4f;--warning-color:#a86200;--error-color:#c62d2a}
 @media (prefers-color-scheme:dark){body{background:#111;--card-background-color:#1c1c1e;--primary-text-color:#f2f2f7;--secondary-text-color:#9a9aa0}}
 ha-card{display:block;background:var(--card-background-color);border-radius:14px;max-width:1300px;margin:0 auto 16px}
+nav{display:flex;gap:6px;max-width:1300px;margin:0 auto 12px;border-bottom:1px solid var(--divider-color)}
+nav a{padding:10px 16px;color:var(--secondary-text-color);text-decoration:none;font-weight:600;border-bottom:3px solid transparent}
+nav a.on{color:var(--primary-color);border-color:var(--primary-color)}
+.pane{display:none}.pane.on{display:block}.pane.grid{max-width:1300px;margin:0 auto}
 </style>
-<body><vic-network-card id=a></vic-network-card><vline-network-card id=b></vline-network-card>
-<script type="module" src="/local/vic-network-card.js"></script><script type="module" src="/local/vline-network-card.js"></script>
+<body>
+<nav><a href="#victoria" data-t="victoria">Victoria</a><a href="#network" data-t="network">Network</a><a href="#ballan" data-t="ballan">Ballan</a></nav>
+<div class=pane id=victoria><vic-network-card id=a></vic-network-card></div>
+<div class=pane id=network><vline-network-card id=b></vline-network-card></div>
+<div class="pane grid" id=ballan><vline-train-card id=c></vline-train-card><vline-train-card id=d></vline-train-card></div>
+<script type="module" src="/local/vic-network-card.js"></script><script type="module" src="/local/vline-network-card.js"></script><script type="module" src="/local/vline-train-card.js"></script>
 <script type="module">
+const show=()=>{const t=(location.hash||"#victoria").slice(1);
+  document.querySelectorAll(".pane").forEach(e=>e.classList.toggle("on",e.id===t));
+  document.querySelectorAll("nav a").forEach(e=>e.classList.toggle("on",e.dataset.t===t));};
+addEventListener("hashchange",show);show();
 fetch("/local/sensors.json").then(r=>r.json()).then(s=>{
   const st={}, now=new Date().toISOString();
   for (const k in s) st[k]={state:String(s[k].state),last_updated:now,attributes:s[k].attributes};
-  const a=document.getElementById("a"), b=document.getElementById("b");
-  a.setConfig({}); b.setConfig({title:"V/Line network"});
-  a.hass=b.hass={states:st};
+  const g=id=>document.getElementById(id);
+  g("a").setConfig({}); g("b").setConfig({title:"V/Line network"});
+  g("c").setConfig({entity:"sensor.vline_ballan_to_ballarat",title:"Ballan to Ballarat"});
+  g("d").setConfig({entity:"sensor.vline_ballan_to_southern_cross",title:"Ballan to Southern Cross"});
+  for (const id of ["a","b","c","d"]) g(id).hass={states:st};
 });
 </script>"""
 
@@ -60,9 +74,13 @@ class H(BaseHTTPRequestHandler):
         self.end_headers(); self.wfile.write(body)
 
 
+class Quiet(ThreadingHTTPServer):
+    def handle_error(self, request, client_address):   # browsers abort requests on reload; ignore
+        pass
+
+
 def serve(port):
-    srv = ThreadingHTTPServer(("0.0.0.0", port), H)
-    return srv
+    return Quiet(("0.0.0.0", port), H)
 
 
 def shots(port):
@@ -76,10 +94,11 @@ def shots(port):
                 errs = []
                 pg.on("pageerror", lambda e: errs.append(str(e)))
                 pg.on("console", lambda m: errs.append(m.text) if m.type == "error" else None)
-                pg.goto(f"http://localhost:{port}/"); pg.wait_for_timeout(2500)
-                f = os.path.join(OUT, "shots", f"{scheme}_{w}.png")
-                pg.screenshot(path=f, full_page=True)
-                print("wrote", f, "| browser errors:", errs[:3] or "none")
+                for tab in ("victoria", "network", "ballan"):
+                    pg.goto(f"http://localhost:{port}/#{tab}"); pg.reload(); pg.wait_for_timeout(2500)
+                    f = os.path.join(OUT, "shots", f"{tab}_{scheme}_{w}.png")
+                    pg.screenshot(path=f, full_page=True)
+                    print("wrote", f, "| browser errors:", errs[:3] or "none")
         b.close()
 
 
