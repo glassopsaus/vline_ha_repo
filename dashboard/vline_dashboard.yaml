@@ -23,17 +23,13 @@ views:
         cards:
           - type: custom:vline-journey-card
             title: Journey planner
-            from: Ballarat
-            to: Southern Cross
           - type: custom:vline-journey-card
             title: Journey planner
-            from: Southern Cross
-            to: Bendigo
 
   - title: V/Line Network
     path: vline-network
     icon: mdi:train
-    panel: true            # straight tube-map lines, each leaving Melbourne on its true compass bearing, plain background
+    panel: true            # straight tube-map lines on a plain background
     cards:
       - type: custom:vline-network-card
         headings: official     # official = V/Line map style (45-degree lines); compass = exact true bearings
