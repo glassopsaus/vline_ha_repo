@@ -82,11 +82,19 @@ def build_light_network(zf):
             "stations": [[n, round(la, 4), round(lo, 4)] for n, la, lo in sts],
             "gtfs_color": f"#{col}" if len(col) == 6 else None,
         })
+    # Some lines come as several routes with one name (variants, old and new ids): show one tab per
+    # name (the variant with most stations) and send the others' trips to it.
+    best = {}
+    for ln in lines:
+        b = best.get(ln["name"].lower())
+        if b is None or len(ln["stations"]) > len(b["stations"]):
+            best[ln["name"].lower()] = ln
+    redirect = {ln["id"]: best[ln["name"].lower()]["id"] for ln in lines}
+    lines = [ln for ln in lines if best[ln["name"].lower()] is ln]
     for i, ln in enumerate(lines):
         ln["color"] = ln["gtfs_color"] or PALETTE[i % len(PALETTE)]
-    keep = {ln["id"] for ln in lines}
     return {
         "lines": lines, "sched": {}, "has_shapes": bool(shapes),
-        "trip_route": {t: r for t, r in trip_route.items() if r in keep},
-        "route_alias": {route_key(r): r for r in keep if route_key(r)},
+        "trip_route": {t: redirect[r] for t, r in trip_route.items() if r in redirect},
+        "route_alias": {route_key(r): k for r, k in redirect.items() if route_key(r)},
     }
