@@ -381,6 +381,12 @@ def build_vehicles(net, rt, veh, now, delay_floor_s=0):
             continue
         d = trip_delay_s(entry, tu, now)
         frm, dst = trip_od(net, trip_id, entry)
+        arr = None
+        try:   # scheduled arrival at the final stop, Melbourne wall-clock "HH:MM"
+            win = trip_window(entry, now, v.get("start_date")) if entry else None
+            arr = win[1].astimezone(TZ).strftime("%H:%M") if win else None
+        except Exception:
+            arr = None
         out.append({
             "id": trip_id, "line": rid,
             "no": train_no(trip_id, v), "from": frm,
@@ -388,6 +394,7 @@ def build_vehicles(net, rt, veh, now, delay_floor_s=0):
             "lat": v["latitude"], "lon": v["longitude"],
             "brg": v.get("bearing"), "spd": v.get("speed_kmh"),
             "delay_min": (round(d / 60) if d is not None else None),
+            "arr": arr,
             "state": v.get("status"),
             "at": v.get("reported_at"),
             "label": v.get("label"),
