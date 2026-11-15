@@ -1,0 +1,48 @@
+name: Live map page
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"      # GitHub may run these a few minutes late
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install gtfs-realtime-bindings requests
+      - name: Today's date (timetable cache key)
+        id: d
+        run: echo "day=$(date -u +%F)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        with:
+          path: out/work
+          key: timetable-${{ steps.d.outputs.day }}
+      - name: Fetch live data
+        env:
+          VLINE_API_KEY: ${{ secrets.VLINE_API_KEY }}
+        run: python tools/live_check.py --reuse
+      - name: Build page
+        run: python tools/build_site.py
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deploy
+        uses: actions/deploy-pages@v4
