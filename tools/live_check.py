@@ -40,7 +40,7 @@ sys.modules["appdaemon.plugins.hass.hassapi"].Hass = Hass
 sys.modules["appdaemon.plugins.hass"].hassapi = sys.modules["appdaemon.plugins.hass.hassapi"]
 
 URL = ("https://opendata.transport.vic.gov.au/dataset/3f4e292e-7f8a-4ffe-831f-1953be0fe448/resource/"
-       "62370a3a-3fe0-4f6b-9022-9ebbf25751cc/download/gtfs.zip")
+       "8af7737c-5c9e-4022-aa98-911aa04370a7/download/gtfs.zip")
 
 
 def nkey(s):                      # same rules as nkey() in vic-network-card.js
