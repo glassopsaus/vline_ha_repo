@@ -81,10 +81,16 @@ text.lbl.mel { font-weight: 800; font-size: 12px; }
 .tr { transition: transform 1s linear; cursor: pointer; }
 .zooming .tr { transition: none; }
 .tr .body { stroke: var(--paper); stroke-width: 2px; vector-effect: non-scaling-stroke; fill: var(--c); }
+.tr .body .win { fill: var(--paper, #fff); stroke: var(--paper, #fff); stroke-width: 0; }
+.tr .body path.shape { stroke: var(--paper, #fff); stroke-width: 1.5px; vector-effect: non-scaling-stroke; }
+.tr .body { stroke: none; }
+.tr .body .jt { fill: none; stroke: var(--paper, #fff); stroke-width: 1px; vector-effect: non-scaling-stroke; }
 .tr.dim { opacity: .25; }
 .tr.picked .ring { display: block; }
 .tr .ring { display: none; fill: none; stroke: var(--primary-text-color); stroke-width: 1.5px; vector-effect: non-scaling-stroke; }
-text.tlbl { font-size: 9px; font-weight: 600; fill: var(--ink); paint-order: stroke; stroke: var(--paper); stroke-width: 3px; pointer-events: none; }
+rect.bub { display: none; fill: var(--paper); stroke: var(--c); stroke-width: 1.5px; vector-effect: non-scaling-stroke; cursor: pointer; }
+.tr.picked rect.bub { stroke-width: 2.5px; }
+text.tlbl { font-size: 9px; font-weight: 600; fill: var(--ink); pointer-events: none; }
 text.dly { font-size: 10px; font-weight: 700; fill: var(--c); paint-order: stroke; stroke: var(--paper); stroke-width: 3px; pointer-events: none; }
 .rows { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; padding: 8px 12px 6px; }
 .row { display: block; width: 100%; box-sizing: border-box; text-align: left; background: none; color: inherit; font: inherit; min-width: 0;
@@ -770,24 +776,27 @@ class VLineNetworkCard extends HTMLElement {
       if (!m) {
         const g = svgEl("g", { class: "tr" });
         const inner = svgEl("g", { class: "u" });
-        const body = svgEl("path", { class: "body", d: "M0,-9 L6.5,7 L0,3.5 L-6.5,7 Z" });
+        const body = svgEl("g", { class: "body" });   // small top-down train: rounded nose, windscreen, two car joints
+        body.append(svgEl("path", { class: "shape", d: "M-5.3,12 V-6.8 Q-5.3,-12.8 0,-12.8 Q5.3,-12.8 5.3,-6.8 V12 Z" }),
+          svgEl("path", { class: "win", d: "M-3.6,-6.9 Q-3.6,-9.9 0,-9.9 Q3.6,-9.9 3.6,-6.9 Z" }),
+          svgEl("path", { class: "jt", d: "M-5.3,2 H5.3 M-5.3,7 H5.3" }));
         const dot = svgEl("circle", { class: "body", r: 5 });
         const ring = svgEl("circle", { class: "ring", r: 10 });
         const t = svgEl("text", { class: "dly", x: 9, y: 4 });
-        const tl = svgEl("text", { class: "tlbl", x: -10, y: -9, "text-anchor": "end" });
-        inner.append(ring, body, dot, t, tl);
+        const tl = svgEl("text", { class: "tlbl", x: -14, y: -9, "text-anchor": "end" });
+        const bub = svgEl("rect", { class: "bub", rx: 8, ry: 8 });
+        inner.append(ring, body, dot, t, bub, tl);
         g.append(inner);
         g.addEventListener("click", (e) => {
           e.stopPropagation();
           const was = this._pick === v.id;
           this._pick = was ? null : v.id;
-          if (!was && this._sel !== v.line) this._select(v.line);
           this._pick = was ? null : v.id;
           this._rowSig = "";
           this._update();
         });
         this._gt.append(g);
-        m = { g, inner, body, dot, t, tl };
+        m = { g, inner, body, dot, t, tl, bub };
         this._markers.set(v.id, m);
       }
       m.v = v;
@@ -796,9 +805,21 @@ class VLineNetworkCard extends HTMLElement {
       const brg = num(v.brg);
       m.body.style.display = brg === null ? "none" : "";
       m.dot.style.display = brg === null ? "" : "none";
+      // A small bubble with the service number; click the train to expand it to origin -> destination.
       const tlm = String(this._config.train_labels || "always").toLowerCase();
-      const showTl = tlm === "always" || (tlm === "zoom" && (this._sel || this._pick === v.id));
-      m.tl.textContent = showTl && (v.no || v.to) ? [v.no, v.from && v.to ? `${v.from} \u2192 ${v.to}` : (v.to ? "to " + v.to : "")].filter(Boolean).join("  ") : "";
+      const picked = this._pick === v.id;
+      const showTl = tlm !== "off" && (tlm === "always" || this._sel || picked);
+      const num1 = v.no || (v.to ? "to " + v.to : "");
+      const sub = picked && v.from && v.to ? `${v.from} \u2192 ${v.to}` : picked && v.to ? "to " + v.to : "";
+      m.tl.textContent = "";
+      if (showTl && num1) {
+        m.tl.setAttribute("y", sub ? -17 : -9);
+        const a = svgEl("tspan", { x: -14, style: "font-weight:700" }); a.textContent = num1; m.tl.append(a);
+        if (sub) { const b = svgEl("tspan", { x: -14, dy: "1.2em" }); b.textContent = sub; m.tl.append(b); }
+        const w = Math.max(num1.length * 6, sub.length * 5.2) + 10, h = sub ? 27 : 15;
+        m.bub.setAttribute("x", -14 - w + 5); m.bub.setAttribute("y", (sub ? -17 : -9) - 11);
+        m.bub.setAttribute("width", w); m.bub.setAttribute("height", h); m.bub.style.display = "block";
+      } else m.bub.style.display = "none";
       const d = v.delay_min;
       m.t.textContent = d !== null && d !== undefined && d >= 5 ? `+${d}` : "";
       const ln = this._geo.lines.find((l) => l.id === v.line);
