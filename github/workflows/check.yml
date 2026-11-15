@@ -1,0 +1,63 @@
+name: Check V/Line + Victoria map
+
+on:
+  push:
+  workflow_dispatch:       # "Run workflow" button on the Actions tab (use this from your phone)
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: |
+          pip install gtfs-realtime-bindings requests playwright
+          playwright install --with-deps chromium
+
+      - name: Offline tests (mock data)
+        run: |
+          cd tests
+          for f in test_*.py; do echo "== $f"; python "$f"; done
+
+      - name: Live feeds (real Open Data, uses the VLINE_API_KEY secret)
+        id: live
+        env:
+          VLINE_API_KEY: ${{ secrets.VLINE_API_KEY }}
+        run: |
+          if [ -z "$VLINE_API_KEY" ]; then echo "VLINE_API_KEY secret not set: skipping live checks" | tee -a "$GITHUB_STEP_SUMMARY"; exit 0; fi
+          set -o pipefail
+          python tools/live_check.py 2>&1 | tee live_check.txt
+          echo "ran=1" >> "$GITHUB_OUTPUT"
+        continue-on-error: true
+
+      - name: Summary
+        if: always()
+        run: |
+          if [ -f live_check.txt ]; then
+            { echo '## Live check'; echo '```'; tail -n 120 live_check.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Screenshots with live data
+        if: steps.live.outputs.ran == '1'
+        run: python tools/preview.py
+        continue-on-error: true
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: results
+          path: |
+            live_check.txt
+            out/shots/*.png
+            out/sensors.json
+            out/vline_network.json
+            out/vic_metro_network.json
+          if-no-files-found: ignore
+
+      - name: Fail the run if the live check found problems
+        if: steps.live.outcome == 'failure'
+        run: exit 1
