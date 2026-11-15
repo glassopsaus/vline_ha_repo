@@ -15,6 +15,7 @@ vline_trains:
   ptv_key: ""
   ptv_poll_seconds: 900
   network_json_path: /homeassistant/www/vline_network.json
+  journeys_json_path: /homeassistant/www/vline_journeys.json
   routes:
     - {id: ballan_to_ballarat, name: Ballan to Ballarat, from_name: Ballan, to_name: Ballarat}
     - {id: ballan_to_southern_cross, name: Ballan to Southern Cross, from_name: Ballan, to_name: Southern Cross}
