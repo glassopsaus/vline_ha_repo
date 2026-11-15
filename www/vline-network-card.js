@@ -317,13 +317,7 @@ class VLineNetworkCard extends HTMLElement {
           for (let j = k + 1; j < names.length; j++) {
             const dir = j <= bend ? d1 : d2;
             const v = vec(dir);
-            let d = step(ln._km[j - 1], ln._km[j]);
-            if (Math.abs(v[1]) < 1e-6) {
-              // Horizontal run: the name sits to the right of its marker, so the gap to the neighbour on that side
-              // must hold the whole name (plus a margin) at the current drawing scale.
-              const lab = names[v[0] < 0 ? j : j - 1];
-              d = Math.max(d, (8 + lab.length * 7.7 + 14) * (this._U || 2.2));
-            }
+            const d = step(ln._km[j - 1], ln._km[j]);
             pos = [pos[0] + v[0] * d, pos[1] + v[1] * d];
             if (!placed.has(key(names[j]))) placed.set(key(names[j]), { x: pos[0], y: pos[1], dir, ln });
             ln._sx.push([pos[0], pos[1]]);
@@ -554,8 +548,11 @@ class VLineNetworkCard extends HTMLElement {
       // Stay on one side of the line: the side of the first preferred offset, never flipping to the other.
       const pref = offs || [0];
       const side = Math.sign(pref[0]);
-      const vo = side === 0 ? [0] : (side > 0 ? [16, 14, 26, 40] : [-16, -14, -26, -40]).filter((v) => true);
-      const cand = side === 0 ? [0] : pref.filter((v) => Math.sign(v) === side || v === 0).concat(vo.filter((v) => !pref.includes(v)));
+      const flat = pref.length === 2 && Math.abs(pref[0]) === 16 && pref[1] === -pref[0];
+      const vo = side === 0 ? [0] : (side > 0 ? [16, 14, 26, 40] : [-16, -14, -26, -40]);
+      // Horizontal runs: the alternating side first, then the other side of the line, then further rows; never just drop the name.
+      const cand = flat ? [pref[0], -pref[0], ...vo.slice(1), ...vo.slice(1).map((v) => -v)]
+        : side === 0 ? [0] : pref.filter((v) => Math.sign(v) === side || v === 0).concat(vo.filter((v) => !pref.includes(v)));
       for (const strict of [true, false]) for (const dx of [0, 10, 22]) for (const off of cand) {
         if (!strict && !isEnd) continue;
         const box = { x: x + (8 + dx) * u, y: y + off * u - h / 2, w, h };
