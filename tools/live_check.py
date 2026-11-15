@@ -52,11 +52,28 @@ def nkey(s):                      # same rules as nkey() in vic-network-card.js
     return re.sub(r"[^a-z0-9]", "", s)
 
 
+def key_check(key):
+    """Show why a key is rejected (GitHub hides the key itself in the log, but not its shape)."""
+    import requests
+    shape = ("UUID-shaped" if re.fullmatch(r"[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}", key) else "NOT UUID-shaped")
+    print(f"\n== Key check ==\n  length {len(key)}, {shape}")
+    url = "https://api.opendata.transport.vic.gov.au/opendata/public-transport/gtfs/realtime/v1/vline/trip-updates"
+    ok = False
+    for hdr in ("KeyId", "Ocp-Apim-Subscription-Key"):
+        try:
+            r = requests.get(url, headers={hdr: key}, timeout=30)
+            print(f"  header {hdr}: HTTP {r.status_code}, {len(r.content)} bytes" + ("" if r.status_code == 200 else f", body: {r.text[:160]!r}"))
+            ok = ok or r.status_code == 200
+        except Exception as exc:
+            print(f"  header {hdr}: {exc!r}")
+    return ok
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default=os.path.join(ROOT, "out"))
     o = ap.parse_args()
-    key = os.environ.get("VLINE_API_KEY", "").strip()
+    key = os.environ.get("VLINE_API_KEY", "").strip().strip("\"'").strip()
     if not key:
         sys.exit("Set VLINE_API_KEY (your Open Data key).")
     out = os.path.abspath(o.out); work = os.path.join(out, "work")
@@ -64,6 +81,8 @@ def main():
 
     import vline_trains, metro_network
     problems, warnings = [], []
+    if not key_check(key):
+        problems.append("the realtime API rejects this key (see Key check above)")
 
     print("\n== Regional (V/Line) ==")
     reg = vline_trains.VLineTrains({
