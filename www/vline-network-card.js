@@ -325,7 +325,7 @@ class VLineNetworkCard extends HTMLElement {
               // Horizontal run: main station names sit just below-right of their markers, always in the same place,
               // so stretch the run until each main name fits clear of the next main name along the line.
               const lab = names[v[0] < 0 ? j : j - 1];
-              if ((this.clientWidth || 800) >= 640) d = Math.max(d, (8 + lab.length * 7.7 + 14) * Math.min(this._U || 2.2, 2.4));   // capped: on a narrow card names are thinned out instead of stretching the map
+              if ((this.clientWidth || 800) >= 640) d = Math.max(d, 0.56 * (8 + lab.length * 7.7 + 14) * Math.min(this._U || 2.2, 3));   // capped: on a narrow card names are thinned out instead of stretching the map
             }
             pos = [pos[0] + v[0] * d, pos[1] + v[1] * d];
             if (!placed.has(key(names[j]))) placed.set(key(names[j]), { x: pos[0], y: pos[1], dir, ln });
@@ -390,6 +390,14 @@ class VLineNetworkCard extends HTMLElement {
         const pick = rest.splice(Math.floor(rest.length / (3 - have + 1)), 1)[0];
         if (pick) { pick.major = true; have++; }
       }
+      // Horizontal runs: alternate names above and below the line (overview: among the names shown; zoomed: every station).
+      const isFlat = (q) => q.offs && q.offs.length === 2 && q.offs[0] === 16 && q.offs[1] === -16;
+      let k1 = 0, k2 = 0;
+      ln._st.forEach((q) => {
+        if (!isFlat(q) || /southern cross/i.test(q.name)) return;
+        q.offsZ = k2++ % 2 ? [-16, 16] : [16, -16];
+        if (q.major || q.end) q.offs = k1++ % 2 ? [-16, 16] : [16, -16];
+      });
       ln._st.forEach((q) => { if (q.end || q.major || q.ix) maxx = Math.max(maxx, q.x + (14 + q.name.length * 8) * (this._U || 2.4)); });   // names must never run off the right edge
       ln._sx.forEach((q) => { minx = Math.min(minx, q[0]); maxx = Math.max(maxx, q[0]); miny = Math.min(miny, q[1]); maxy = Math.max(maxy, q[1]); });
     });
@@ -559,8 +567,8 @@ class VLineNetworkCard extends HTMLElement {
       const side = Math.sign(pref[0]);
       const vo = side === 0 ? [0] : (side > 0 ? [16, 14, 26, 40] : [-16, -14, -26, -40]).filter((v) => true);
       const cand = side === 0 ? [0] : pref.filter((v) => Math.sign(v) === side || v === 0).concat(vo.filter((v) => !pref.includes(v)));
-      const flat = pref.length === 2 && pref[0] === 16 && pref[1] === -16;   // horizontal run: one fixed slot, just below-right
-      for (const strict of [true, false]) for (const dx of (flat ? [0] : [0, 10, 22])) for (const off of (flat ? [16] : cand)) {
+      const flat = pref.length === 2 && Math.abs(pref[0]) === 16 && pref[0] === -pref[1];   // horizontal run: one fixed slot, just below-right
+      for (const strict of [true, false]) for (const dx of (flat ? [0] : [0, 10, 22])) for (const off of (flat ? [pref[0]] : cand)) {
         if (!strict && !isEnd) continue;
         const box = { x: x + (8 + dx) * u, y: y + off * u - h / 2, w, h };
         if (box.x + box.w > view.x + view.w - 2 * u || hit(box) || (strict && onLine(box))) continue;
@@ -585,8 +593,8 @@ class VLineNetworkCard extends HTMLElement {
     const lines = this._geo.lines;
     const zoomed = this._sel ? lines.find((l) => l.id === this._sel) : null;
     if (zoomed) {
-      zoomed._st.filter((s) => s.end && !/southern cross/i.test(s.name)).forEach((s) => place(s.name, s.x, s.y, "", s.offs, true));
-      zoomed._st.filter((s) => !s.end && !/southern cross/i.test(s.name)).forEach((s) => place(s.name, s.x, s.y, "", s.offs));
+      zoomed._st.filter((s) => s.end && !/southern cross/i.test(s.name)).forEach((s) => place(s.name, s.x, s.y, "", s.offsZ || s.offs, true));
+      zoomed._st.filter((s) => !s.end && !/southern cross/i.test(s.name)).forEach((s) => place(s.name, s.x, s.y, "", s.offsZ || s.offs));
     } else {
       lines.forEach((l) => l._st.filter((s) => s.end && !/southern cross/i.test(s.name)).forEach((s) => place(s.name, s.x, s.y, "", s.offs, true)));
       lines.forEach((l) => l._st.filter((s) => s.major && !s.end && !/southern cross/i.test(s.name)).forEach((s) => place(s.name, s.x, s.y, "", s.offs)));
