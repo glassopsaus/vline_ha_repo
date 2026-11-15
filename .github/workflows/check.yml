@@ -74,6 +74,7 @@ jobs:
             out/shots/*.png
             out/sensors.json
             out/vline_network.json
+            out/vline_journeys.json
             out/vic_metro_network.json
           if-no-files-found: ignore
 
