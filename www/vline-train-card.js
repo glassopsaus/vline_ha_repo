@@ -150,21 +150,23 @@ class VLineTrainCard extends HTMLElement {
   // Build the hero (graphic) markup once; later ticks only move things.
   _ensureHero() {
     if (this._built === "hero") return;
+    this._rtl = String(this._config.direction || "ltr").toLowerCase() === "rtl";   // rtl: Ballan on the left, train runs right to left
+    const P = (x) => (this._rtl ? 400 - x : x);
     this._body.innerHTML = `
       <div id="hero">
         <div class="count"><span class="big" id="big"></span><span class="unit" id="unit"></span></div>
         <svg id="svg" viewBox="0 0 400 110" role="img" aria-label="Train progress to Ballan">
-          <line class="rail-base" x1="${X0}" y1="${RAIL_Y}" x2="${X1}" y2="${RAIL_Y}"/>
-          <line class="sleepers" x1="${X0}" y1="${RAIL_Y + 1}" x2="${X1}" y2="${RAIL_Y + 1}"/>
-          <line class="rail-fill" id="fill" x1="${X0}" y1="${RAIL_Y}" x2="${X0}" y2="${RAIL_Y}"/>
-          <circle class="stn prev" id="stn-prev" cx="${X0}" cy="${RAIL_Y}" r="8"/>
-          <circle class="stn" id="stn-ballan" cx="${X1}" cy="${RAIL_Y}" r="8"/>
-          <text class="stn-label" id="lbl-prev" x="${X0}" y="92"></text>
-          <text class="stn-time" id="time-prev" x="${X0}" y="106"></text>
-          <text class="stn-label" id="lbl-ballan" x="${X1}" y="92">Ballan</text>
-          <text class="stn-time" id="time-ballan" x="${X1}" y="106"></text>
-          <g class="train snap" id="train" style="transform: translate(${X0 - 44}px, 0px)">
-            <rect class="train-body" x="-34" y="32" width="31" height="21" rx="5"/>
+          <line class="rail-base" x1="${P(X0)}" y1="${RAIL_Y}" x2="${P(X1)}" y2="${RAIL_Y}"/>
+          <line class="sleepers" x1="${P(X0)}" y1="${RAIL_Y + 1}" x2="${P(X1)}" y2="${RAIL_Y + 1}"/>
+          <line class="rail-fill" id="fill" x1="${P(X0)}" y1="${RAIL_Y}" x2="${P(X0)}" y2="${RAIL_Y}"/>
+          <circle class="stn prev" id="stn-prev" cx="${P(X0)}" cy="${RAIL_Y}" r="8"/>
+          <circle class="stn" id="stn-ballan" cx="${P(X1)}" cy="${RAIL_Y}" r="8"/>
+          <text class="stn-label" id="lbl-prev" x="${P(X0)}" y="92"></text>
+          <text class="stn-time" id="time-prev" x="${P(X0)}" y="106"></text>
+          <text class="stn-label" id="lbl-ballan" x="${P(X1)}" y="92">Ballan</text>
+          <text class="stn-time" id="time-ballan" x="${P(X1)}" y="106"></text>
+          <g class="train snap" id="train" style="transform: translate(${P(X0 - 44)}px, 0px)">
+            <g transform="${this._rtl ? 'scale(-1 1)' : ''}"><rect class="train-body" x="-34" y="32" width="31" height="21" rx="5"/>
             <path class="train-body" d="M0 53 V35 Q0 31 4 31 H14 L28 43 V53 Z"/>
             <rect class="train-body" x="-4" y="46" width="5" height="3"/>
             <rect class="train-win" x="-30" y="36" width="7" height="7" rx="2"/>
@@ -177,7 +179,7 @@ class VLineTrainCard extends HTMLElement {
             <circle class="train-wheel" cx="-11" cy="57" r="3.6"/>
             <circle class="train-wheel" cx="7" cy="57" r="3.6"/>
             <circle class="train-wheel" cx="20" cy="57" r="3.6"/>
-          </g>
+          </g></g>
         </svg>
         <div class="status" id="status"></div>
         <div class="warn" id="warn" hidden></div>
@@ -263,10 +265,11 @@ class VLineTrainCard extends HTMLElement {
     root.className = "ph-" + phase;
     const span = X1 - STOP - X0;
     let x = X0 - 44;
+    const P = (v) => (this._rtl ? 400 - v : v);
     if (pct !== null && phase !== "not_left") x = X0 + (span * pct) / 100;
-    this._el.train.style.transform = `translate(${x}px, 0px)`;
+    this._el.train.style.transform = `translate(${P(x)}px, 0px)`;
     this._el.fill.setAttribute("x2",
-      String(phase === "at_station" ? X1 : Math.max(X0, Math.min(X1, x))));
+      String(P(phase === "at_station" ? X1 : Math.max(X0, Math.min(X1, x)))));
     this._el["stn-prev"].classList.toggle("done", phase === "left" || phase === "at_station");
     this._el["stn-ballan"].classList.toggle("done", phase === "at_station");
     if (this._firstPaint) {
