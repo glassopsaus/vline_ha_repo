@@ -34,6 +34,7 @@ import requests
 from google.transit import gtfs_realtime_pb2
 
 import vline_core as core
+import vline_journeys as journeys
 import vline_fetch as fetch
 import vline_network as vnet
 
@@ -61,6 +62,7 @@ class VLineTrains(hass.Hass):
         self.limit = int(self.args.get("services_per_route", 4))
         self.net_json_path = self.args.get("network_json_path", "/homeassistant/www/vline_network.json")
         self.net_cache_path = self.args.get("network_cache_path", "/config/vline_network_cache.json")
+        self.journeys_json_path = self.args.get("journeys_json_path", "/homeassistant/www/vline_journeys.json")
         self.ptv_devid = str(self.args.get("ptv_devid") or "").strip()
         self.ptv_key = str(self.args.get("ptv_key") or "").strip()
         self.ptv_poll_seconds = max(int(self.args.get("ptv_poll_seconds", 900)), 300)
@@ -135,6 +137,7 @@ class VLineTrains(hass.Hass):
                     if regional is None:
                         self.log("Timetable is already up to date")
                         if self.timetable is not None:
+                            self._journeys_from_saved()   # keep the journey planner's date window moving
                             return
                     else:
                         downloaded = True
@@ -166,6 +169,7 @@ class VLineTrains(hass.Hass):
                 self._publish_network(vnet.build_network(zf))
             except Exception as exc:
                 self.error(f"Network map build failed (route cards unaffected): {exc!r}")
+            self._publish_journeys(zf)
             self.timetable = new
             self.log(f"Timetable ready: {len(new['trips'])} candidate trips")
         except Exception as exc:
@@ -183,6 +187,26 @@ class VLineTrains(hass.Hass):
                     self.error(f"Cached timetable unreadable: {exc2}")
         finally:
             self._refreshing = False
+
+    def _publish_journeys(self, zf):
+        """All-stations timetable for the journey-planner card; never allowed to break the route cards."""
+        try:
+            data = journeys.build_journeys(zf, datetime.now(core.TZ).date())
+            os.makedirs(os.path.dirname(self.journeys_json_path) or ".", exist_ok=True)
+            self._write_atomic(self.journeys_json_path, json.dumps(data, separators=(",", ":")).encode())
+            self.log(f"Journey planner timetable ready: {len(data['stations'])} stations, {len(data['trips'])} trips")
+        except Exception as exc:
+            self.error(f"Journey planner timetable failed (other cards unaffected): {exc!r}")
+
+    def _journeys_from_saved(self):
+        try:
+            with open(self.static_path, "rb") as fh:
+                zf = zipfile.ZipFile(io.BytesIO(fh.read()))
+            if "stops.txt" not in zf.namelist():
+                zf = zipfile.ZipFile(io.BytesIO(fetch.extract_regional(zf)))
+            self._publish_journeys(zf)
+        except Exception as exc:
+            self.error(f"Journey planner refresh failed: {exc!r}")
 
     def _publish_network(self, net):
         geometry = {"lines": net["lines"], "has_shapes": net["has_shapes"]}
