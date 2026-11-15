@@ -1,5 +1,5 @@
 /*
- * vic-network-card  v1.2.0
+ * vic-network-card  v1.3.0
  * The official Victorian train network map with live trains moving over it and a status for every line
  * (Metro Trains and V/Line). Tap a line to highlight it and zoom in; drag to pan, scroll or pinch to zoom.
  *
@@ -10,14 +10,15 @@
  * title: Victorian train network                 # optional
  * map_image: /local/vic_network_map.png          # optional
  * anchors_url: /local/vic_network_anchors.json   # optional
- * basemap: image                                # "image" = official map (default); "geo" = true-geography
- *                                                # Victoria outline with V/Line lines at their real positions
+ * basemap: image                                # "image" = official map (default); "geo" = Victoria outline with V/Line
+ *                                                # lines at their real positions; "blank" = same positions and directions
+ *                                                # on a plain background (tube-map style), fitted to the lines
  * train_labels: zoom                             # always | zoom | off  (number, origin and destination beside a train)
  * sources:                                       # optional (these are the defaults)
  *   - { entity: sensor.vline_network, geometry_url: /local/vline_network.json, group: Regional }
  *   - { entity: sensor.metro_network, geometry_url: /local/vic_metro_network.json, group: Metro }
  */
-const VIC_VERSION = "1.2.0";
+const VIC_VERSION = "1.3.0";
 console.info("%c vic-network-card %c v" + VIC_VERSION + " ", "background:#222;color:#fff", "background:#8b1f9a;color:#fff");
 
 const SVG_NS = "http://www.w3.org/2000/svg";
@@ -35,8 +36,8 @@ const MAP_COLOURS = [
 const REGIONAL_COLOUR = "#8b1f9a";
 
 // ---- true-geography basemap (basemap: geo) -------------------------------------------------
-// Equal-scale projection of lon/lat onto a 1400 x 1020 canvas covering Victoria.
-const GEO = { lon0: 140.85, lat0: -33.95, kx: 1400 / 9.3, ky: 1400 / 9.3 / Math.cos((37.2 * Math.PI) / 180), w: 1400, h: 1020 };
+// Equal-scale projection of lon/lat onto a 1400 x 800 canvas: Victoria cut off just north of Swan Hill.
+const GEO = { lon0: 140.85, lat0: -35.05, kx: 1400 / 9.3, ky: 1400 / 9.3 / Math.cos((37.2 * Math.PI) / 180), w: 1400, h: 800 };
 const gpx = (lat, lon) => [(lon - GEO.lon0) * GEO.kx, (GEO.lat0 - lat) * GEO.ky];
 // Hand-simplified outline of Victoria (lon, lat), clockwise from the SA coast; and Port Phillip Bay.
 const VIC_OUTLINE = [[140.96, -34.02], [141.3, -34.03], [141.92, -34.12], [142.17, -34.25], [142.55, -34.45], [142.78, -34.6], [143.0, -34.72], [143.33, -35.03],
@@ -97,6 +98,10 @@ svg.map.drag { cursor: grabbing; }
 .u { transform: scale(var(--u, 1)); }
 svg.geo .fade { fill: var(--card-background-color, #fff); }
 .mapwrap.geo { background: color-mix(in srgb, var(--primary-text-color, #222) 9%, var(--card-background-color, #fff)); }
+.mapwrap.geo.blank { background: var(--card-background-color, #fff); }
+.blank .gl.case { stroke-width: 10px; }
+.blank .gl.main { stroke-width: 6px; }
+.blank .stn circle { stroke: var(--primary-text-color, #222); stroke-width: 2px; }
 .sea { fill: color-mix(in srgb, var(--primary-color, #0a64d6) 16%, var(--card-background-color, #fff)); stroke: none; }
 .land { fill: color-mix(in srgb, var(--primary-text-color, #222) 2%, var(--card-background-color, #fff)); stroke: var(--secondary-text-color, #888); stroke-width: 1.2px; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
 .bay { fill: color-mix(in srgb, var(--primary-color, #0a64d6) 14%, var(--card-background-color, #fff)); stroke: var(--secondary-text-color, #888); stroke-width: .8px; vector-effect: non-scaling-stroke; }
@@ -125,8 +130,8 @@ text.dly { font-size: 10px; font-weight: 700; fill: var(--c); paint-order: strok
 .note { margin: 0 16px 6px; padding: 8px 10px; border-radius: 8px; font-size: .82rem; color: var(--primary-text-color);
   background: color-mix(in srgb, var(--c) 12%, transparent); border: 1px solid color-mix(in srgb, var(--c) 40%, transparent); }
 .grp { padding: 8px 16px 0; font-size: .72rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--secondary-text-color); }
-.rows { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; padding: 6px 12px 4px; }
-@container (min-width: 640px) { .rows { grid-template-columns: repeat(var(--cols, 7), minmax(0, 1fr)); } }
+.rows { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; padding: 6px 12px 4px; }
+@container (min-width: 640px) { .rows { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
 .row { display: block; width: 100%; box-sizing: border-box; text-align: left; background: none; color: inherit; font: inherit; min-width: 0;
   padding: 7px 9px 8px; border-radius: 9px; cursor: pointer; border: 1px solid var(--divider-color); border-top: 4px solid var(--lc); }
 .row.sel { background: color-mix(in srgb, var(--primary-text-color) 8%, transparent); border-color: var(--lc); }
@@ -162,7 +167,7 @@ class VicNetworkCard extends HTMLElement {
   }
 
   setConfig(config) {
-    const geo = !!(config && config.basemap === "geo");
+    const geo = !!(config && (config.basemap === "geo" || config.basemap === "blank"));
     const regional = { entity: "sensor.vline_network", geometry_url: "/local/vline_network.json", group: "Regional" };
     const c = Object.assign({
       title: geo ? "V/Line network" : "Victorian train network",
@@ -175,7 +180,8 @@ class VicNetworkCard extends HTMLElement {
         { entity: "sensor.metro_network", geometry_url: "/local/vic_metro_network.json", group: "Metro" },
       ],
     }, config || {});
-    this._geo = c.basemap === "geo";
+    this._geo = c.basemap === "geo" || c.basemap === "blank";
+    this._blank = c.basemap === "blank";
     this._config = c;
     this._srcs = c.sources.map((cfg) => ({ cfg, geo: null, geoVersion: null, loading: false, attrs: null, state: null }));
     this._render();
@@ -332,15 +338,16 @@ class VicNetworkCard extends HTMLElement {
     this._rowSig = "";
     this._sel = null;
     const A = this._anchors, root = this._root();
+    this._full = this._blank ? this._fitBox() : { x: 0, y: 0, w: A.w, h: A.h };
+    const F = this._full;
     root.innerHTML = `
       <div class="head"><div><div class="sign"><span class="t">${esc(this._config.title)}</span><span class="bars"><i style="background:#0c4a9b"></i><i style="background:#c8102e"></i><i style="background:#f2b705"></i><i style="background:#00a0df"></i><i style="background:#0f9d3a"></i><i style="background:#f489b6"></i><i style="background:#8b1f9a"></i></span></div><div class="sub" id="sub"></div></div><span class="chip" id="chip"></span></div>
       <div id="banner"></div>
-      <div class="mapwrap${this._geo ? " geo" : ""}"><svg class="map${this._geo ? " geo" : ""}" id="svg" viewBox="0 0 ${A.w} ${A.h}" role="img" aria-label="Map of Victorian trains and lines">
+      <div class="mapwrap${this._geo ? " geo" : ""}${this._blank ? " blank" : ""}"><svg class="map${this._geo ? " geo" : ""}${this._blank ? " blank" : ""}" id="svg" viewBox="${F.x} ${F.y} ${F.w} ${F.h}" role="img" aria-label="Map of Victorian trains and lines">
         ${this._geo ? "" : `<image href="${esc(this._config.map_image)}" x="0" y="0" width="${A.w}" height="${A.h}" preserveAspectRatio="none"/>`}</svg>
         <button class="reset" id="reset" type="button">All lines</button></div>
       <div id="rows"></div>
       <div class="foot"><span id="f1"></span><span id="f2"></span></div>`;
-    this._full = { x: 0, y: 0, w: A.w, h: A.h };
     this._vb = { ...this._full };
     const svg = root.querySelector("#svg");
     this._svg = svg;
@@ -363,6 +370,7 @@ class VicNetworkCard extends HTMLElement {
   _drawGeoBase(svg) {
     const pts = (a) => a.map((q) => gpx(q[1], q[0]).map((v) => v.toFixed(1)).join(",")).join(" ");
     const g = svgEl("g", { id: "geobase" });
+    if (!this._blank) {
     // sea = everything south/east of Victoria's coast; the rest of the canvas stays "interstate land"
     const i0 = VIC_OUTLINE.findIndex((q) => q[0] === 149.98);
     const sea = VIC_OUTLINE.slice(i0).concat([[139.0, -38.06], [139.0, -41.5], [151.5, -41.5], [151.5, -37.51]]);
@@ -370,7 +378,8 @@ class VicNetworkCard extends HTMLElement {
     g.append(svgEl("polygon", { class: "land", points: pts(VIC_OUTLINE) }));
     g.append(svgEl("polygon", { class: "bay", points: pts(VIC_BAY) }));
     const txt = (lon, lat, t) => { const [x, y] = gpx(lat, lon); const e = svgEl("text", { class: "geol", x: x.toFixed(0), y: y.toFixed(0), "text-anchor": "middle" }); e.textContent = t; return e; };
-    g.append(txt(143.6, -39.05, "Bass Strait"), txt(147.2, -34.9, "New South Wales"), txt(139.9, -36.2, "SA"));
+    g.append(txt(143.6, -39.05, "Bass Strait"), txt(147.6, -35.5, "New South Wales"));
+    }
     // lines, drawn from their own paths at true positions
     const lg = svgEl("g", { id: "geolines" });
     this._lines.forEach((L) => {
@@ -451,6 +460,18 @@ class VicNetworkCard extends HTMLElement {
     for (const s of this._stns) if (!s.on) s.outer.classList.remove("lab");
   }
 
+  // Blank background: fit the view to the lines themselves (plus a margin), not to the whole of Victoria.
+  _fitBox() {
+    let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+    this._lines.forEach((L) => (L._anch || []).forEach(({ p }) => { x0 = Math.min(x0, p[0]); x1 = Math.max(x1, p[0]); y0 = Math.min(y0, p[1]); y1 = Math.max(y1, p[1]); }));
+    if (x0 > x1) return { x: 0, y: 0, w: this._anchors.w, h: this._anchors.h };
+    const m = 70;   // room for names at the ends of lines
+    let w = x1 - x0 + 2 * m + 120, h = y1 - y0 + 2 * m;   // extra width: names sit to the right
+    const asp = h / w;
+    if (asp < 0.6) h = w * 0.6; else if (asp > 0.95) w = h / 0.95;
+    return { x: (x0 + x1) / 2 - w / 2 + 40, y: (y0 + y1) / 2 - h / 2, w, h };
+  }
+
   _measure() {
     if (!this._svg) return;
     const r = this._svg.getBoundingClientRect();
@@ -463,8 +484,8 @@ class VicNetworkCard extends HTMLElement {
     const f = this._full;
     vb.w = Math.min(f.w, Math.max(f.w / 12, vb.w));
     vb.h = vb.w * (f.h / f.w);
-    vb.x = Math.max(0, Math.min(f.w - vb.w, vb.x));
-    vb.y = Math.max(0, Math.min(f.h - vb.h, vb.y));
+    vb.x = Math.max(f.x, Math.min(f.x + f.w - vb.w, vb.x));
+    vb.y = Math.max(f.y, Math.min(f.y + f.h - vb.h, vb.y));
     this._vb = vb;
     this._svg.setAttribute("viewBox", `${vb.x} ${vb.y} ${vb.w} ${vb.h}`);
     this._applyU();
