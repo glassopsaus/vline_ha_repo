@@ -2,22 +2,7 @@
 # (replace everything in the editor with this)
 title: V/Line
 views:
-  - title: Victoria
-    path: victoria
-    icon: mdi:map
-    panel: true            # official network map with live Metro + V/Line trains
-    cards:
-      - type: custom:vic-network-card
-
-  - title: Network
-    path: network
-    icon: mdi:train
-    panel: true            # the map card fills the whole page (best in landscape)
-    cards:
-      - type: custom:vline-network-card
-        title: V/Line network
-
-  - title: Ballan
+  - title: Ballan Services
     path: ballan
     icon: mdi:train-variant
     cards:
@@ -27,3 +12,19 @@ views:
       - type: custom:vline-train-card
         entity: sensor.vline_ballan_to_southern_cross
         title: Ballan to Southern Cross
+
+  - title: V/Line Network
+    path: vline-network
+    icon: mdi:train
+    panel: true            # V/Line lines at their true positions on a map of Victoria
+    cards:
+      - type: custom:vic-network-card
+        basemap: geo
+        train_labels: always   # always | zoom | off   (number, origin and destination beside each train)
+
+  - title: Full Victorian Network
+    path: victoria
+    icon: mdi:map
+    panel: true            # official Transport Victoria map with live Metro + V/Line trains
+    cards:
+      - type: custom:vic-network-card
