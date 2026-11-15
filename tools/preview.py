@@ -52,8 +52,8 @@ async function load(){
       g("a").setConfig({}); g("b").setConfig({});
       g("c").setConfig({entity:"sensor.vline_ballan_to_ballarat",title:"Ballan to Ballarat"});
       g("d").setConfig({entity:"sensor.vline_ballan_to_southern_cross",title:"Ballan to Southern Cross",direction:"rtl"});
-      g("e").setConfig({title:"Journey planner",from:"Ballarat",to:"Southern Cross"});
-      g("f").setConfig({title:"Journey planner",from:"Southern Cross",to:"Bendigo"});}
+      g("e").setConfig({title:"Journey planner"});
+      g("f").setConfig({title:"Journey planner"});}
     for (const id of ["a","b","c","d","e","f"]) g(id).hass={states:st};
   }catch(e){console.error(e)}
 }
