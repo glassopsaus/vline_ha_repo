@@ -1,5 +1,5 @@
 /*
- * vic-network-card  v1.0.0
+ * vic-network-card  v1.2.0
  * The official Victorian train network map with live trains moving over it and a status for every line
  * (Metro Trains and V/Line). Tap a line to highlight it and zoom in; drag to pan, scroll or pinch to zoom.
  *
@@ -10,11 +10,14 @@
  * title: Victorian train network                 # optional
  * map_image: /local/vic_network_map.png          # optional
  * anchors_url: /local/vic_network_anchors.json   # optional
+ * basemap: image                                # "image" = official map (default); "geo" = true-geography
+ *                                                # Victoria outline with V/Line lines at their real positions
+ * train_labels: zoom                             # always | zoom | off  (number, origin and destination beside a train)
  * sources:                                       # optional (these are the defaults)
  *   - { entity: sensor.vline_network, geometry_url: /local/vline_network.json, group: Regional }
  *   - { entity: sensor.metro_network, geometry_url: /local/vic_metro_network.json, group: Metro }
  */
-const VIC_VERSION = "1.0.0";
+const VIC_VERSION = "1.2.0";
 console.info("%c vic-network-card %c v" + VIC_VERSION + " ", "background:#222;color:#fff", "background:#8b1f9a;color:#fff");
 
 const SVG_NS = "http://www.w3.org/2000/svg";
@@ -30,6 +33,25 @@ const MAP_COLOURS = [
   [/werribee|williamstown|sandringham/i, "#f489b6"],
 ];
 const REGIONAL_COLOUR = "#8b1f9a";
+
+// ---- true-geography basemap (basemap: geo) -------------------------------------------------
+// Equal-scale projection of lon/lat onto a 1400 x 1020 canvas covering Victoria.
+const GEO = { lon0: 140.85, lat0: -33.95, kx: 1400 / 9.3, ky: 1400 / 9.3 / Math.cos((37.2 * Math.PI) / 180), w: 1400, h: 1020 };
+const gpx = (lat, lon) => [(lon - GEO.lon0) * GEO.kx, (GEO.lat0 - lat) * GEO.ky];
+// Hand-simplified outline of Victoria (lon, lat), clockwise from the SA coast; and Port Phillip Bay.
+const VIC_OUTLINE = [[140.96, -34.02], [141.3, -34.03], [141.92, -34.12], [142.17, -34.25], [142.55, -34.45], [142.78, -34.6], [143.0, -34.72], [143.33, -35.03],
+  [143.56, -35.34], [144.13, -35.64], [144.45, -35.9], [144.75, -36.13], [145.0, -35.95], [145.57, -35.82], [146.0, -36.02], [146.3, -36.07], [146.92, -36.08],
+  [147.18, -36.2], [147.5, -36.1], [147.95, -36.2], [148.1, -36.45], [148.18, -36.82], [149.98, -37.51], [149.75, -37.57], [149.27, -37.8], [148.72, -37.81],
+  [148.0, -37.88], [147.5, -38.0], [147.1, -38.4], [146.7, -38.7], [146.5, -38.85], [146.37, -39.13], [146.2, -38.87], [145.93, -38.9], [145.73, -38.65],
+  [145.37, -38.52], [145.1, -38.42], [144.89, -38.5], [144.72, -38.43], [144.62, -38.31], [144.5, -38.28], [144.33, -38.33], [144.19, -38.4], [143.97, -38.54],
+  [143.67, -38.76], [143.51, -38.86], [143.17, -38.7], [142.9, -38.6], [142.48, -38.4], [142.23, -38.39], [141.6, -38.35], [141.38, -38.38], [140.97, -38.06]];
+const VIC_BAY = [[144.62, -38.3], [144.52, -38.17], [144.4, -38.1], [144.45, -38.0], [144.66, -37.99], [144.86, -37.87], [144.93, -37.83], [145.0, -37.9],
+  [145.07, -37.99], [145.12, -38.1], [145.07, -38.22], [144.95, -38.33], [144.74, -38.35]];
+const GEO_ANCHORS = { w: GEO.w, h: GEO.h, geo: true };
+// Towns that get a name first when space is tight (nkey form).
+const GEO_MAJOR = new Set(["southerncross", "geelong", "ballarat", "bendigo", "shepparton", "wodonga", "albury", "traralgon", "warrnambool", "swanhill",
+  "echuca", "seymour", "sunshine", "melton", "maryborough", "ararat", "sale", "bairnsdale", "wangaratta", "benalla", "castlemaine", "kyneton", "colac",
+  "warragul", "pakenham", "wendouree", "epsom", "waurnponds", "murchison", "moe", "morwell", "stawell", "donnybrook", "wallan", "ballan", "baccusmarsh", "tarneit"]);
 
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => (
   { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -73,6 +95,26 @@ svg.map.drag { cursor: grabbing; }
 .hl .core { stroke-width: 7px; }
 .hl circle { fill: #fff; stroke: #222; stroke-width: 2px; vector-effect: non-scaling-stroke; }
 .u { transform: scale(var(--u, 1)); }
+svg.geo .fade { fill: var(--card-background-color, #fff); }
+.mapwrap.geo { background: color-mix(in srgb, var(--primary-text-color, #222) 9%, var(--card-background-color, #fff)); }
+.sea { fill: color-mix(in srgb, var(--primary-color, #0a64d6) 16%, var(--card-background-color, #fff)); stroke: none; }
+.land { fill: color-mix(in srgb, var(--primary-text-color, #222) 2%, var(--card-background-color, #fff)); stroke: var(--secondary-text-color, #888); stroke-width: 1.2px; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
+.bay { fill: color-mix(in srgb, var(--primary-color, #0a64d6) 14%, var(--card-background-color, #fff)); stroke: var(--secondary-text-color, #888); stroke-width: .8px; vector-effect: non-scaling-stroke; }
+.gl { fill: none; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.gl.case { stroke: var(--card-background-color, #fff); stroke-width: 6px; }
+.gl.main { stroke: #8b1f9a; stroke-width: 3px; }
+.stn circle { fill: var(--card-background-color, #fff); stroke: #5a1766; stroke-width: 1.5px; vector-effect: non-scaling-stroke; }
+text.stl { font-size: 11px; font-weight: 600; fill: var(--primary-text-color, #222); paint-order: stroke; stroke: var(--card-background-color, #fff); stroke-width: 3px; pointer-events: none; }
+text.geol { font-size: 12px; letter-spacing: .12em; fill: var(--secondary-text-color, #888); opacity: .7; pointer-events: none; text-transform: uppercase; }
+text.lbl { font-size: 10.5px; font-weight: 600; fill: var(--primary-text-color, #222); paint-order: stroke; stroke: var(--card-background-color, #fff); stroke-width: 3px; pointer-events: none; }
+text.lbl tspan.sub { font-weight: 500; fill: var(--secondary-text-color, #666); }
+.tr text.lbl { display: none; }
+.tr.lab text.lbl { display: block; }
+.tr.lab .dly { display: none; }
+.tr.short text.lbl tspan.sub { display: none; }
+text.lbl tspan.n { font-weight: 700; }
+.stn text { display: none; }
+.stn.lab text { display: block; }
 .tr { transition: transform 1s linear; cursor: pointer; }
 .zooming .tr, .drag .tr { transition: none; }
 .tr .body { stroke: #fff; stroke-width: 2px; vector-effect: non-scaling-stroke; fill: var(--c); }
@@ -120,19 +162,25 @@ class VicNetworkCard extends HTMLElement {
   }
 
   setConfig(config) {
+    const geo = !!(config && config.basemap === "geo");
+    const regional = { entity: "sensor.vline_network", geometry_url: "/local/vline_network.json", group: "Regional" };
     const c = Object.assign({
-      title: "Victorian train network",
+      title: geo ? "V/Line network" : "Victorian train network",
+      basemap: "image",
+      train_labels: geo ? "always" : "zoom",
       map_image: "/local/vic_network_map.png",
       anchors_url: "/local/vic_network_anchors.json",
-      sources: [
-        { entity: "sensor.vline_network", geometry_url: "/local/vline_network.json", group: "Regional" },
+      sources: geo ? [regional] : [
+        regional,
         { entity: "sensor.metro_network", geometry_url: "/local/vic_metro_network.json", group: "Metro" },
       ],
     }, config || {});
+    this._geo = c.basemap === "geo";
     this._config = c;
     this._srcs = c.sources.map((cfg) => ({ cfg, geo: null, geoVersion: null, loading: false, attrs: null, state: null }));
     this._render();
-    this._loadAnchors();
+    if (this._geo) { this._anchors = GEO_ANCHORS; this._err = null; this._built = false; this._update(); }
+    else this._loadAnchors();
   }
 
   getCardSize() { return 9; }
@@ -217,13 +265,16 @@ class VicNetworkCard extends HTMLElement {
       s.geo.lines.forEach((ln) => {
         const L = { id: ln.id, src: si, group: s.cfg.group || "", name: ln.name, raw: ln };
         const m = MAP_COLOURS.find((c) => c[0].test(ln.name));
-        L.color = (s.cfg.group || "").toLowerCase().startsWith("reg") ? REGIONAL_COLOUR : (m ? m[1] : (ln.gtfs_color || ln.color || "#555"));
+        L.color = this._geo ? (ln.color || ln.gtfs_color || "#555")
+          : (s.cfg.group || "").toLowerCase().startsWith("reg") ? REGIONAL_COLOUR : (m ? m[1] : (ln.gtfs_color || ln.color || "#555"));
         L._rp = ln.path.map((q) => this._kxy(q[0], q[1]));
         L._cum = [0];
         for (let i = 1; i < L._rp.length; i++) L._cum.push(L._cum[i - 1] + Math.hypot(L._rp[i][0] - L._rp[i - 1][0], L._rp[i][1] - L._rp[i - 1][1]));
         let prev = -1;
         const anch = [];
-        ln.stations.forEach((st) => {
+        if (this._geo) {          // true geography: the line's own path, positioned by lat/lon
+          ln.path.forEach((q, i) => anch.push({ s: L._cum[i], p: gpx(q[0], q[1]) }));
+        } else ln.stations.forEach((st) => {
           const p = A.stations[nkey(st[0])];
           if (!p) return;
           const pr = this._project(L, this._kxy(st[1], st[2]));
@@ -232,7 +283,7 @@ class VicNetworkCard extends HTMLElement {
           anch.push({ s: prev, p: [p[0], p[1]] });
         });
         L._anch = anch;
-        L.matched = anch.length; L.total = ln.stations.length;
+        L.matched = this._geo ? ln.stations.length : anch.length; L.total = ln.stations.length;
         lines.push(L);
       });
     });
@@ -284,8 +335,8 @@ class VicNetworkCard extends HTMLElement {
     root.innerHTML = `
       <div class="head"><div><div class="sign"><span class="t">${esc(this._config.title)}</span><span class="bars"><i style="background:#0c4a9b"></i><i style="background:#c8102e"></i><i style="background:#f2b705"></i><i style="background:#00a0df"></i><i style="background:#0f9d3a"></i><i style="background:#f489b6"></i><i style="background:#8b1f9a"></i></span></div><div class="sub" id="sub"></div></div><span class="chip" id="chip"></span></div>
       <div id="banner"></div>
-      <div class="mapwrap"><svg class="map" id="svg" viewBox="0 0 ${A.w} ${A.h}" role="img" aria-label="Map of Victorian trains and lines">
-        <image href="${esc(this._config.map_image)}" x="0" y="0" width="${A.w}" height="${A.h}" preserveAspectRatio="none"/></svg>
+      <div class="mapwrap${this._geo ? " geo" : ""}"><svg class="map${this._geo ? " geo" : ""}" id="svg" viewBox="0 0 ${A.w} ${A.h}" role="img" aria-label="Map of Victorian trains and lines">
+        ${this._geo ? "" : `<image href="${esc(this._config.map_image)}" x="0" y="0" width="${A.w}" height="${A.h}" preserveAspectRatio="none"/>`}</svg>
         <button class="reset" id="reset" type="button">All lines</button></div>
       <div id="rows"></div>
       <div class="foot"><span id="f1"></span><span id="f2"></span></div>`;
@@ -296,12 +347,108 @@ class VicNetworkCard extends HTMLElement {
     this._fade = svgEl("rect", { class: "fade", x: 0, y: 0, width: A.w, height: A.h });
     this._hl = svgEl("g", { class: "hl" });
     this._gt = svgEl("g", { id: "trains" });
+    this._labels = [];
+    if (this._geo) this._drawGeoBase(svg);
     svg.append(this._fade, this._hl, this._gt);
     this._markers.clear();
     root.querySelector("#reset").addEventListener("click", () => this._select(null));
     this._wireGestures(svg);
     this._built = true;
     this._measure();
+    this._scheduleLabels();
+  }
+
+
+  // ------------------------------------------------- true-geography basemap
+  _drawGeoBase(svg) {
+    const pts = (a) => a.map((q) => gpx(q[1], q[0]).map((v) => v.toFixed(1)).join(",")).join(" ");
+    const g = svgEl("g", { id: "geobase" });
+    // sea = everything south/east of Victoria's coast; the rest of the canvas stays "interstate land"
+    const i0 = VIC_OUTLINE.findIndex((q) => q[0] === 149.98);
+    const sea = VIC_OUTLINE.slice(i0).concat([[139.0, -38.06], [139.0, -41.5], [151.5, -41.5], [151.5, -37.51]]);
+    g.append(svgEl("polygon", { class: "sea", points: pts(sea) }));
+    g.append(svgEl("polygon", { class: "land", points: pts(VIC_OUTLINE) }));
+    g.append(svgEl("polygon", { class: "bay", points: pts(VIC_BAY) }));
+    const txt = (lon, lat, t) => { const [x, y] = gpx(lat, lon); const e = svgEl("text", { class: "geol", x: x.toFixed(0), y: y.toFixed(0), "text-anchor": "middle" }); e.textContent = t; return e; };
+    g.append(txt(143.6, -39.05, "Bass Strait"), txt(147.2, -34.9, "New South Wales"), txt(139.9, -36.2, "SA"));
+    // lines, drawn from their own paths at true positions
+    const lg = svgEl("g", { id: "geolines" });
+    this._lines.forEach((L) => {
+      if (!L._anch || L._anch.length < 2) return;
+      const d = "M" + L._anch.map((a) => a.p[0].toFixed(1) + "," + a.p[1].toFixed(1)).join("L");
+      lg.append(svgEl("path", { class: "gl case", d }));
+    });
+    this._lines.forEach((L) => {
+      if (!L._anch || L._anch.length < 2) return;
+      const d = "M" + L._anch.map((a) => a.p[0].toFixed(1) + "," + a.p[1].toFixed(1)).join("L");
+      lg.append(svgEl("path", { class: "gl main", d, style: `stroke:${L.color}` }));
+    });
+    g.append(lg);
+    // stations (one dot per place, however many lines share it)
+    const by = new Map();
+    this._lines.forEach((L) => L.raw.stations.forEach((st, i, arr) => {
+      const k = nkey(st[0]);
+      let e = by.get(k);
+      if (!e) { e = { name: st[0], lat: st[1], lon: st[2], n: 0, end: false, lines: new Set() }; by.set(k, e); }
+      e.lines.add(L.id); e.n = e.lines.size;
+      if (i === 0 || i === arr.length - 1) e.end = true;
+    }));
+    const sg = svgEl("g", { id: "geostns" });
+    this._stns = [];
+    by.forEach((e, k) => {
+      const [x, y] = gpx(e.lat, e.lon);
+      const outer = svgEl("g", { class: "stn", transform: `translate(${x.toFixed(1)},${y.toFixed(1)})` });
+      const inner = svgEl("g", { class: "u" });
+      const big = e.end || e.n > 1;
+      const c = svgEl("circle", { r: big ? 4.6 : 3.2 });
+      const t = svgEl("text", { class: "stl" });
+      t.textContent = e.name;
+      inner.append(c, t);
+      outer.append(inner);
+      sg.append(outer);
+      const pri = (e.end ? 100 : 0) + (GEO_MAJOR.has(k) ? 80 : 0) + (e.n > 1 ? 40 : 0) + Math.min(e.n, 3) * 5 - e.name.length * 0.2;
+      this._stns.push({ k, outer, t, x, y, w: e.name.length * 6.1 + 4, pri });
+    });
+    this._stns.sort((a, b) => b.pri - a.pri);
+    g.append(sg);
+    svg.append(g);
+  }
+
+  _scheduleLabels() {
+    if (!this._geo || !this._stns) return;
+    cancelAnimationFrame(this._lr);
+    this._lr = requestAnimationFrame(() => this._layoutStations());
+  }
+
+  // Place as many station names as fit without overlapping, in priority order (screen-pixel boxes).
+  _layoutStations() {
+    if (!this._stns || !this._vb) return;
+    const vb = this._vb, k = this._pxw / vb.w, H = 13;
+    const boxes = [];
+    const hit = (b) => boxes.some((o) => b[0] < o[2] && b[2] > o[0] && b[1] < o[3] && b[3] > o[1]);
+    const vis = [];
+    for (const s of this._stns) {
+      const px = (s.x - vb.x) * k, py = (s.y - vb.y) * k;
+      s.px = px; s.py = py;
+      s.on = px > -30 && py > -30 && px < this._pxw + 30 && py < this._pxw * (vb.h / vb.w) + 30;
+      if (s.on) { vis.push(s); boxes.push([px - 5, py - 5, px + 5, py + 5]); }
+    }
+    this._stnDots = boxes.slice();
+    this._stnLabels = [];
+    for (const s of vis) {
+      const px = s.px, py = s.py, w = s.w;
+      const cand = [["start", 8, 4, [px + 7, py - 8, px + 9 + w, py + 8]], ["end", -8, 4, [px - 9 - w, py - 8, px - 7, py + 8]],
+        ["middle", 0, -9, [px - w / 2, py - 9 - H, px + w / 2, py - 7]], ["middle", 0, 17, [px - w / 2, py + 7, px + w / 2, py + 9 + H]]];
+      let pick = null;
+      for (const c of cand) if (!hit(c[3])) { pick = c; break; }
+      s.outer.classList.toggle("lab", !!pick);
+      if (pick) {
+        s.t.setAttribute("text-anchor", pick[0]); s.t.setAttribute("x", pick[1]); s.t.setAttribute("y", pick[2]);
+        boxes.push(pick[3]);
+        this._stnLabels.push({ box: pick[3], s, imp: s.pri >= 80 });
+      }
+    }
+    for (const s of this._stns) if (!s.on) s.outer.classList.remove("lab");
   }
 
   _measure() {
@@ -309,6 +456,7 @@ class VicNetworkCard extends HTMLElement {
     const r = this._svg.getBoundingClientRect();
     if (r.width > 10) this._pxw = r.width;
     this._applyU();
+    this._scheduleLabels();
   }
   _applyU() { if (this._svg && this._vb) this._svg.style.setProperty("--u", (this._vb.w / this._pxw).toFixed(4)); }
   _setVB(vb) {
@@ -320,6 +468,7 @@ class VicNetworkCard extends HTMLElement {
     this._vb = vb;
     this._svg.setAttribute("viewBox", `${vb.x} ${vb.y} ${vb.w} ${vb.h}`);
     this._applyU();
+    this._scheduleLabels();
     const zoomed = vb.w < f.w * 0.98;
     this.shadowRoot.getElementById("reset").classList.toggle("on", zoomed || !!this._sel);
   }
@@ -516,7 +665,7 @@ class VicNetworkCard extends HTMLElement {
           const tr = (vehByLine[key] || []).slice().sort((a, b) => (b.delay_min || 0) - (a.delay_min || 0)).map((v) => {
             const d = v.delay_min;
             const dl = d === null || d === undefined ? "" : d >= 1 ? ` &middot; ${d} min late` : d <= -1 ? ` &middot; ${-d} min early` : " &middot; on time";
-            return `<li>${v.to ? "To " + esc(v.to) : "Train"}${dl}${v.state ? " &middot; " + esc(v.state) : ""}</li>`;
+            return `<li>${v.no ? "<b>" + esc(v.no) + "</b> " : ""}${v.from && v.to ? esc(v.from) + " \u2192 " + esc(v.to) : v.to ? "To " + esc(v.to) : "Train"}${dl}${v.state ? " &middot; " + esc(v.state) : ""}</li>`;
           });
           const miss = L.matched < 2 ? `<div style="color:var(--secondary-text-color)">Only ${L.matched} of this line's ${L.total} stations were found on the map, so its trains cannot be drawn.</div>` : "";
           out.push(`<div class="more">${esc(L.name)}: ${esc(s.label)}${items.length ? `<ul>${items.join("")}</ul>` : ""}${tr.length ? `<div style="margin-top:6px;color:var(--secondary-text-color)">Trains now</div><ul>${tr.join("")}</ul>` : "<div>No trains running on this line right now.</div>"}${miss}</div>`);
@@ -552,7 +701,8 @@ class VicNetworkCard extends HTMLElement {
         const dot = svgEl("circle", { class: "body", r: 5 });
         const ring = svgEl("circle", { class: "ring", r: 10 });
         const t = svgEl("text", { class: "dly", x: 9, y: 4 });
-        inner.append(ring, body, dot, t);
+        const lbl = svgEl("text", { class: "lbl", x: 11, y: -3 });
+        inner.append(ring, body, dot, t, lbl);
         g.append(inner);
         g.addEventListener("click", (e) => {
           e.stopPropagation();
@@ -564,7 +714,7 @@ class VicNetworkCard extends HTMLElement {
           this._update();
         });
         this._gt.append(g);
-        m = { g, body, dot, t };
+        m = { g, body, dot, t, lbl, sig: "", w: 0 };
         this._markers.set(key, m);
       }
       m.v = v;
@@ -575,7 +725,20 @@ class VicNetworkCard extends HTMLElement {
       m.dot.style.display = brg === null ? "" : "none";
       const d = v.delay_min;
       m.t.textContent = d !== null && d !== undefined && d >= 5 ? `+${d}` : "";
-      m.g.setAttribute("aria-label", `Train${v.to ? " to " + v.to : ""}, ${L.name} line`);
+      m.g.setAttribute("aria-label", `Train ${v.no || ""}${v.from ? " from " + v.from : ""}${v.to ? " to " + v.to : ""}, ${L.name} line`.replace("  ", " "));
+      // label: service number (+ minutes late), then origin -> destination
+      const l1 = `${v.no || ""}${d !== null && d !== undefined && d >= 5 ? ` +${d}` : ""}`.trim();
+      const l2 = v.from && v.to ? `${v.from} \u2192 ${v.to}` : v.to ? `to ${v.to}` : v.from ? `from ${v.from}` : "";
+      if (m.sig !== l1 + "|" + l2) {
+        m.sig = l1 + "|" + l2;
+        m.lbl.textContent = "";
+        const a = svgEl("tspan", { class: "n" }); a.textContent = l1 || (v.label || "Train");
+        m.lbl.append(a);
+        if (l2) { const b = svgEl("tspan", { class: "sub" }); b.textContent = l2; m.lbl.append(b); }
+        m.l1 = a; m.l2 = m.lbl.querySelector(".sub");
+        m.w = Math.max(l1.length * 6.6, l2.length * 5.6) + 6;
+        m.lines = l2 ? 2 : 1;
+      }
       // schematic position follows the real position along the line; direction from the bearing
       const km = this._kxy(lat, lon);
       const pr = this._project(L, km);
@@ -590,6 +753,64 @@ class VicNetworkCard extends HTMLElement {
     this._frame();
   }
 
+  _wantLabel(m, key) {
+    const mode = String(this._config.train_labels || "zoom");
+    if (this._pick === key) return true;
+    if (mode === "off") return false;
+    const lk = m.v._src + "|" + m.v.line;
+    if (this._sel && this._sel !== lk) return false;           // other lines are faded while one is selected
+    if (mode === "always" && this._pxw >= 600) return true;    // on a phone-width map "always" would be a wall of text
+    return this._sel === lk || (this._vb && this._vb.w < this._full.w * 0.55);
+  }
+
+  // Show "number / origin -> destination" beside trains, choosing a free spot (screen-pixel boxes).
+  // Train labels win over ordinary station names (those step aside); big towns and line ends stay.
+  _layoutTrainLabels() {
+    if (!this._vb) return;
+    const vb = this._vb, k = this._pxw / vb.w, LH = 12;
+    const items = [];
+    for (const sl of this._stnLabels || []) sl.s.outer.classList.add("lab");
+    for (const [key, m] of this._markers) {
+      if (!m.base || !m.at) continue;
+      m.px = (m.at.x - vb.x) * k; m.py = (m.at.y - vb.y) * k;
+      m.show = this._wantLabel(m, key) && m.px > -20 && m.py > -20 && m.px < this._pxw + 20 && m.py < this._pxw * (vb.h / vb.w) + 20;
+      if (m.show) items.push([key, m]); else m.g.classList.remove("lab");
+    }
+    items.sort((a, b) => (a[0] === this._pick ? -1 : b[0] === this._pick ? 1 : 0) || (b[1].v.delay_min || 0) - (a[1].v.delay_min || 0));
+    const hard = (this._stnDots || []).slice();
+    const soft = [];
+    for (const sl of this._stnLabels || []) (sl.imp ? hard : soft).push(sl);
+    const hardBoxes = hard.map((h) => (Array.isArray(h) ? h : h.box));
+    for (const m of this._markers.values()) if (m.px !== undefined) hardBoxes.push([m.px - 9, m.py - 9, m.px + 9, m.py + 9]);
+    const ov = (a, o) => a[0] < o[2] && a[2] > o[0] && a[1] < o[3] && a[3] > o[1];
+    const hardHit = (bx) => hardBoxes.some((o) => ov(bx, o));
+    const softHits = (bx) => soft.filter((sl) => sl.s.outer.classList.contains("lab") && ov(bx, sl.box));
+    const spots = (m, compact) => {
+      const w = compact ? (m.l1 ? m.l1.textContent.length * 6.6 + 6 : 30) : m.w, ln = compact ? 1 : m.lines, h = ln * LH + 2, x = m.px, y = m.py;
+      const y0 = ln === 2 ? -22 : -13;
+      return [["start", 11, -3, [x + 10, y - 13, x + 10 + w, y - 13 + h]], ["end", -11, -3, [x - 10 - w, y - 13, x - 10, y - 13 + h]],
+        ["middle", 0, y0, [x - w / 2, y - 12 - h, x + w / 2, y - 11]], ["middle", 0, 18, [x - w / 2, y + 8, x + w / 2, y + 8 + h]]];
+    };
+    for (const [key, m] of items) {
+      let pick = null, compact = false;
+      for (const c of [false, true]) {
+        const cs = spots(m, c).filter((q) => !hardHit(q[3]));
+        pick = cs.find((q) => !softHits(q[3]).length) || cs[0] || null;
+        if (pick) { compact = c; break; }
+        if (m.lines < 2) break;
+      }
+      if (!pick && key === this._pick) { pick = spots(m, false)[0]; compact = false; }
+      m.g.classList.toggle("lab", !!pick);
+      m.g.classList.toggle("short", !!pick && compact);
+      if (!pick) continue;
+      softHits(pick[3]).forEach((sl) => sl.s.outer.classList.remove("lab"));
+      m.lbl.setAttribute("text-anchor", pick[0]); m.lbl.setAttribute("y", pick[2]); m.lbl.setAttribute("x", pick[1]);
+      if (m.l1) { m.l1.setAttribute("x", pick[1]); }
+      if (m.l2) { m.l2.setAttribute("x", pick[1]); m.l2.setAttribute("dy", "1.15em"); }
+      hardBoxes.push(pick[3]);
+    }
+  }
+
   _frame() {
     if (!this._markers || !this._built) return;
     const dt = Math.min(45, Math.max(0, (performance.now() - this._anchor) / 1000));
@@ -600,9 +821,11 @@ class VicNetworkCard extends HTMLElement {
       if (b.sign && b.spd > 0 && !/at stop/i.test(b.state || "")) s += b.sign * ((b.spd * dt) / 3600);
       const at = this._at(b.L, s);
       if (!at) continue;
+      m.at = at;
       m.g.style.transform = `translate(${at.x.toFixed(1)}px, ${at.y.toFixed(1)}px)`;
       if (b.sign) m.body.setAttribute("transform", `rotate(${(at.ang + (b.sign < 0 ? 180 : 0)).toFixed(0)})`);
     }
+    this._layoutTrainLabels();
     const f1 = this.shadowRoot.getElementById("f1");
     if (f1) {
       const ts = this._srcs.map((s) => Date.parse((s.attrs && s.attrs.updated) || "")).filter((t) => !Number.isNaN(t));
